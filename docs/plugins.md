@@ -157,6 +157,19 @@ thpm run
 
 This matches Omarchy 3.3+ themes.
 
+## Theme Branding Files
+
+Bundled branding support uses these active-theme files when they exist:
+
+```text
+~/.config/omarchy/current/theme/about.txt
+~/.config/omarchy/current/theme/screensaver.txt
+```
+
+`about.txt` is copied to `~/.config/omarchy/branding/about.txt` for Fastfetch/About. `screensaver.txt` is copied to `~/.config/omarchy/branding/screensaver.txt` for the Omarchy screensaver. Missing branding files are non-destructive and leave the current user branding in place.
+
+Disabling the branding plugin only stops future syncs. Uninstalling `thpm` restores Omarchy's current source defaults from `~/.local/share/omarchy/icon.txt` and `~/.local/share/omarchy/logo.txt` when those files are present.
+
 ## Doctor Checks
 
 `thpm doctor` is read-only. It checks the Omarchy hook directory, the shared

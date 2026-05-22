@@ -69,11 +69,24 @@ Some apps also require one-time selection of the generated Omarchy theme inside 
 
 **Editors and writing:** Cursor, Obsidian Terminal plugin, Typora, VS Code, Windsurf, Zed
 
-**Desktop and UI:** Discord clients using Vencord-compatible themes, GTK apps, nwg-dock-hyprland, Qt6 apps using qt6ct, SwayNC, Vicinae
+**Desktop and UI:** Discord clients using Vencord-compatible themes, GTK apps, nwg-dock-hyprland, Omarchy branding, Qt6 apps using qt6ct, SwayNC, Vicinae
 
 **Terminal and CLI:** cliamp, Cava, Fish, Foot live colors, fzf, Superfile, tmux
 
 **Games and media:** Heroic Games Launcher, Spotify using Spicetify, Steam
+
+### Omarchy Branding
+
+The branding plugin syncs active-theme text logos into Omarchy's user branding files:
+
+```text
+~/.config/omarchy/current/theme/about.txt
+~/.config/omarchy/current/theme/screensaver.txt
+```
+
+When present, those files are copied to `~/.config/omarchy/branding/about.txt` for Fastfetch/About and `~/.config/omarchy/branding/screensaver.txt` for the screensaver. Missing theme branding files leave the existing user branding unchanged.
+
+`thpm disable branding` stops future syncs but does not restore or delete the current branding. `thpm remove` restores Omarchy's current source defaults from `~/.local/share/omarchy/icon.txt` and `~/.local/share/omarchy/logo.txt`.
 
 ## Commands
 
@@ -195,7 +208,7 @@ Or run:
 curl -fsSL https://raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager/thpm/uninstall.sh | bash
 ```
 
-The uninstaller removes `thpm`, bundled plugins, the shared runtime, and generated integration files it knows how to clean up. Custom Omarchy hooks are preserved.
+The uninstaller removes `thpm`, bundled plugins, the shared runtime, and generated integration files it knows how to clean up. Custom Omarchy hooks are preserved. Omarchy branding is restored from the current Omarchy source defaults when those default files are available.
 
 ## Troubleshooting
 

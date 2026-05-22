@@ -2,6 +2,26 @@
 
 set -e
 
+OMARCHY_PATH="${OMARCHY_PATH:-$HOME/.local/share/omarchy}"
+
+restore_omarchy_branding_file() {
+    local source_file="$1"
+    local target_file="$2"
+    local label="$3"
+
+    if [[ -f "$source_file" ]]; then
+        mkdir -p "$(dirname "$target_file")"
+        cp -f "$source_file" "$target_file"
+    else
+        echo "Warning: Omarchy $label branding default not found: $source_file"
+    fi
+}
+
+restore_omarchy_branding_defaults() {
+    restore_omarchy_branding_file "$OMARCHY_PATH/icon.txt" "$HOME/.config/omarchy/branding/about.txt" "about"
+    restore_omarchy_branding_file "$OMARCHY_PATH/logo.txt" "$HOME/.config/omarchy/branding/screensaver.txt" "screensaver"
+}
+
 omarchy-show-logo
 
 echo "Uninstalling thpm.."
@@ -20,6 +40,7 @@ fi
 bundled_plugins=(
     00-fish.sh
     00-fzf.sh
+    10-branding.sh
     10-discord.sh
     10-gtk.sh
     10-qt6ct.sh
@@ -56,6 +77,8 @@ for plugin in "${bundled_plugins[@]}"; do
     rm -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample"
 done
 rmdir "$HOME/.config/omarchy/hooks/theme-set.d" 2>/dev/null || true
+
+restore_omarchy_branding_defaults
 
 echo "Attempting to revert applied themes.."
 

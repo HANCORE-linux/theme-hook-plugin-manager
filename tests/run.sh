@@ -1036,6 +1036,91 @@ EOF
   assert_contains "$output" "Restart Steam after theming." "restart notification can use stdout without a running process"
 }
 
+test_branding_plugin_copies_theme_branding() {
+  local home_dir="$TMP_ROOT/branding-home"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local theme_dir="$home_dir/.config/omarchy/current/theme"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir"
+  printf 'about from theme\n' > "$theme_dir/about.txt"
+  printf 'screensaver from theme\n' > "$theme_dir/screensaver.txt"
+  cp "$ROOT_DIR/theme-set.d/10-branding.sh" "$hook_dir/10-branding.sh"
+
+  run_theme_hooks "$home_dir" >/dev/null
+
+  assert_eq "about from theme" "$(cat "$home_dir/.config/omarchy/branding/about.txt")" "branding plugin copies theme about.txt"
+  assert_eq "screensaver from theme" "$(cat "$home_dir/.config/omarchy/branding/screensaver.txt")" "branding plugin copies theme screensaver.txt"
+}
+
+test_branding_plugin_preserves_missing_sources() {
+  local home_dir="$TMP_ROOT/branding-partial-home"
+  local theme_dir="$home_dir/.config/omarchy/current/theme"
+  local branding_dir="$home_dir/.config/omarchy/branding"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$branding_dir"
+  printf 'old about\n' > "$branding_dir/about.txt"
+  printf 'old screensaver\n' > "$branding_dir/screensaver.txt"
+  printf 'new about\n' > "$theme_dir/about.txt"
+
+  THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" bash "$ROOT_DIR/theme-set.d/10-branding.sh" >/dev/null
+
+  assert_eq "new about" "$(cat "$branding_dir/about.txt")" "branding plugin updates available source"
+  assert_eq "old screensaver" "$(cat "$branding_dir/screensaver.txt")" "branding plugin preserves missing screensaver source target"
+}
+
+test_branding_plugin_skips_without_theme_branding() {
+  local home_dir="$TMP_ROOT/branding-missing-home"
+  local branding_dir="$home_dir/.config/omarchy/branding"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$branding_dir"
+  printf 'old about\n' > "$branding_dir/about.txt"
+  printf 'old screensaver\n' > "$branding_dir/screensaver.txt"
+
+  output="$(THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" bash "$ROOT_DIR/theme-set.d/10-branding.sh" 2>&1)"
+
+  assert_contains "$output" "Omarchy branding not found. Skipping.." "branding plugin skips when theme has no branding files"
+  assert_eq "old about" "$(cat "$branding_dir/about.txt")" "branding plugin preserves about target when skipping"
+  assert_eq "old screensaver" "$(cat "$branding_dir/screensaver.txt")" "branding plugin preserves screensaver target when skipping"
+}
+
+test_branding_plugin_disable_stops_sync_until_enabled() {
+  local home_dir="$TMP_ROOT/branding-disable-home"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local theme_dir="$home_dir/.config/omarchy/current/theme"
+  local branding_dir="$home_dir/.config/omarchy/branding"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir"
+  cp "$ROOT_DIR/theme-set.d/10-branding.sh" "$hook_dir/10-branding.sh"
+  printf 'about v1\n' > "$theme_dir/about.txt"
+  printf 'screensaver v1\n' > "$theme_dir/screensaver.txt"
+  run_theme_hooks "$home_dir" >/dev/null
+
+  output="$(run_thpm "$home_dir" disable branding)"
+  assert_contains "$output" "Plugin Disabled: branding" "thpm disable branding reports disabled plugin"
+  assert_file_exists "$hook_dir/10-branding.sh.sample" "thpm disable branding creates sample hook"
+  assert_file_missing "$hook_dir/10-branding.sh" "thpm disable branding removes active hook"
+
+  printf 'about v2\n' > "$theme_dir/about.txt"
+  printf 'screensaver v2\n' > "$theme_dir/screensaver.txt"
+  run_theme_hooks "$home_dir" >/dev/null
+
+  assert_eq "about v1" "$(cat "$branding_dir/about.txt")" "disabled branding plugin leaves about target unchanged"
+  assert_eq "screensaver v1" "$(cat "$branding_dir/screensaver.txt")" "disabled branding plugin leaves screensaver target unchanged"
+
+  output="$(run_thpm "$home_dir" enable branding)"
+  assert_contains "$output" "Plugin Enabled: branding" "thpm enable branding reports enabled plugin"
+  run_theme_hooks "$home_dir" >/dev/null
+
+  assert_eq "about v2" "$(cat "$branding_dir/about.txt")" "re-enabled branding plugin updates about target"
+  assert_eq "screensaver v2" "$(cat "$branding_dir/screensaver.txt")" "re-enabled branding plugin updates screensaver target"
+}
+
 test_hook_plugins_use_portable_assumption_guards() {
   assert_not_contains "$(cat "$ROOT_DIR/theme-set.d/10-discord.sh")" 'themes",' "discord plugin has no comma-suffixed Flatpak path"
   assert_contains "$(cat "$ROOT_DIR/theme-set.d/10-discord.sh")" '$HOME/.var/app/com.discordapp.Discord/config/Vencord/themes' "discord plugin checks user Flatpak Discord path"
@@ -2285,11 +2370,16 @@ test_uninstall_removes_files_and_qutebrowser_theme() {
   local bin_dir="$TMP_ROOT/uninstall-bin"
   local output
 
-  mkdir -p "$bin_dir" "$home_dir/.local/bin" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/qutebrowser/omarchy" "$home_dir/.zen/default/chrome"
+  mkdir -p "$bin_dir" "$home_dir/.local/bin" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/omarchy/branding" "$home_dir/.config/qutebrowser/omarchy" "$home_dir/.zen/default/chrome"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/bin/thpm"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/share/omarchy/bin/thpm"
+  printf 'default about\n' > "$home_dir/.local/share/omarchy/icon.txt"
+  printf 'default screensaver\n' > "$home_dir/.local/share/omarchy/logo.txt"
+  printf 'themed about\n' > "$home_dir/.config/omarchy/branding/about.txt"
+  printf 'themed screensaver\n' > "$home_dir/.config/omarchy/branding/screensaver.txt"
   printf '# Omarchy 3.3+ uses colors.toml as the source of truth for theme colors.\n' > "$home_dir/.config/omarchy/hooks/theme-set"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/00-fzf.sh"
+  printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/10-branding.sh"
   cp "$ROOT_DIR/theme-set.d/40-zen.sh" "$home_dir/.config/omarchy/hooks/theme-set.d/40-zen.sh"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/99-custom.sh"
   mkdir -p "$home_dir/.local/share/thpm/lib"
@@ -2318,20 +2408,49 @@ EOF
   make_stub_bin "$bin_dir" qutebrowser 'exit 0'
   make_stub_bin "$bin_dir" vicinae 'exit 1'
 
-  output="$(PATH="$bin_dir:$PATH" HOME="$home_dir" bash "$ROOT_DIR/uninstall.sh" 2>&1)"
+  output="$(OMARCHY_PATH="$home_dir/.local/share/omarchy" PATH="$bin_dir:$PATH" HOME="$home_dir" bash "$ROOT_DIR/uninstall.sh" 2>&1)"
 
   assert_contains "$output" "Uninstalled thpm!" "uninstall reports completion"
   assert_file_missing "$home_dir/.local/bin/thpm" "uninstall removes thpm binary"
   assert_file_missing "$home_dir/.local/share/omarchy/bin/thpm" "uninstall removes legacy omarchy bin thpm"
   assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set" "uninstall removes theme-set hook"
   assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.d/00-fzf.sh" "uninstall removes bundled plugin"
+  assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.d/10-branding.sh" "uninstall removes branding plugin"
   assert_file_missing "$home_dir/.config/omarchy/hooks/theme-set.d/40-zen.sh" "uninstall removes zen plugin"
   assert_file_exists "$home_dir/.config/omarchy/hooks/theme-set.d/99-custom.sh" "uninstall preserves custom Omarchy hook"
+  assert_eq "default about" "$(cat "$home_dir/.config/omarchy/branding/about.txt")" "uninstall restores Omarchy about branding default"
+  assert_eq "default screensaver" "$(cat "$home_dir/.config/omarchy/branding/screensaver.txt")" "uninstall restores Omarchy screensaver branding default"
   assert_file_missing "$home_dir/.local/share/thpm/lib/theme-env.sh" "uninstall removes shared theme env"
   assert_file_missing "$home_dir/.config/qutebrowser/omarchy" "uninstall removes qutebrowser theme directory"
   assert_eq "config.load_autoconfig()" "$(cat "$home_dir/.config/qutebrowser/config.py")" "uninstall removes qutebrowser config lines"
   assert_file_missing "$home_dir/.zen/default/chrome/thpm-zen-userChrome.css" "uninstall removes managed zen stylesheet"
   assert_not_contains "$(cat "$home_dir/.zen/default/chrome/userChrome.css")" "THPM Zen hook" "uninstall removes zen import block"
+}
+
+test_uninstall_warns_and_preserves_branding_when_default_missing() {
+  local home_dir="$TMP_ROOT/uninstall-branding-missing-home"
+  local bin_dir="$TMP_ROOT/uninstall-branding-missing-bin"
+  local output
+
+  mkdir -p "$bin_dir" "$home_dir/.local/share/omarchy" "$home_dir/.config/omarchy/branding"
+  printf 'default about\n' > "$home_dir/.local/share/omarchy/icon.txt"
+  printf 'themed about\n' > "$home_dir/.config/omarchy/branding/about.txt"
+  printf 'themed screensaver\n' > "$home_dir/.config/omarchy/branding/screensaver.txt"
+
+  make_stub_bin "$bin_dir" omarchy-show-logo 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_stub_bin "$bin_dir" python 'exit 1'
+  make_stub_bin "$bin_dir" spicetify 'exit 1'
+  make_stub_bin "$bin_dir" gsettings 'exit 1'
+  make_stub_bin "$bin_dir" qutebrowser 'exit 1'
+  make_stub_bin "$bin_dir" vicinae 'exit 1'
+
+  output="$(OMARCHY_PATH="$home_dir/.local/share/omarchy" PATH="$bin_dir:$PATH" HOME="$home_dir" bash "$ROOT_DIR/uninstall.sh" 2>&1)"
+
+  assert_contains "$output" "Warning: Omarchy screensaver branding default not found" "uninstall warns when screensaver default is missing"
+  assert_contains "$output" "Uninstalled thpm!" "uninstall continues after missing branding default"
+  assert_eq "default about" "$(cat "$home_dir/.config/omarchy/branding/about.txt")" "uninstall restores available about default"
+  assert_eq "themed screensaver" "$(cat "$home_dir/.config/omarchy/branding/screensaver.txt")" "uninstall preserves screensaver branding when default is missing"
 }
 
 test_uninstall_invokes_external_revert_commands() {
@@ -2384,6 +2503,7 @@ print_coverage_summary() {
     "$ROOT_DIR/lib/theme-env.sh"
     "$ROOT_DIR/install.sh"
     "$ROOT_DIR/uninstall.sh"
+    "$ROOT_DIR/theme-set.d/10-branding.sh"
     "$ROOT_DIR/theme-set.d/00-fish.sh"
     "$ROOT_DIR/theme-set.d/00-fzf.sh"
     "$ROOT_DIR/theme-set.d/10-superfile.sh"
@@ -2444,6 +2564,10 @@ main() {
   test_restart_notification_can_be_disabled_globally
   test_restart_notification_can_be_disabled_for_app
   test_restart_notification_supports_stdout_and_not_running
+  test_branding_plugin_copies_theme_branding
+  test_branding_plugin_preserves_missing_sources
+  test_branding_plugin_skips_without_theme_branding
+  test_branding_plugin_disable_stops_sync_until_enabled
   test_hook_plugins_use_portable_assumption_guards
   test_browser_plugins_skip_missing_profiles
   test_zen_plugin_uses_managed_imports_and_migrates_legacy_css
@@ -2486,6 +2610,7 @@ main() {
   test_install_interactive_prompt_installs_missing_adw_theme
   test_install_gum_prompt_installs_missing_adw_theme
   test_uninstall_removes_files_and_qutebrowser_theme
+  test_uninstall_warns_and_preserves_branding_when_default_missing
   test_uninstall_invokes_external_revert_commands
 
   if [[ "$TEST_FAILURES" -gt 0 ]]; then

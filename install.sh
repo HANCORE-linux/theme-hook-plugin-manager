@@ -29,6 +29,7 @@ rm -rf /tmp/theme-hook/
 bundled_plugins=(
     00-fish.sh
     00-fzf.sh
+    10-branding.sh
     10-discord.sh
     10-gtk.sh
     10-qt6ct.sh
