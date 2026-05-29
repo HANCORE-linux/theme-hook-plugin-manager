@@ -77,7 +77,9 @@ Some apps also require one-time selection of the generated Omarchy theme inside 
 
 ### Omarchy Branding
 
-The branding plugin syncs active-theme text logos into Omarchy's user branding files:
+The branding plugin is installed disabled by default. Enable it with `thpm enable branding` when you want themes to manage Omarchy's Fastfetch/About and screensaver logos.
+
+Once enabled, it syncs active-theme text logos into Omarchy's user branding files:
 
 ```text
 ~/.config/omarchy/current/theme/about.txt

@@ -1977,14 +1977,16 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   local installed_theme_set="$home_dir/.config/omarchy/hooks/theme-set"
   local installed_theme_env="$home_dir/.local/share/thpm/lib/theme-env.sh"
   local installed_version="$home_dir/.local/share/thpm/version"
+  local update_cache="$home_dir/.local/share/thpm/update-check"
   local installed_config="$home_dir/.config/thpm/config.toml"
   local output
   local status
 
-  mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.local/share/omarchy/bin"
+  mkdir -p "$hook_dir" "$bin_dir" "$home_dir/.local/share/omarchy/bin" "$(dirname "$update_cache")"
   printf '#!/usr/bin/env bash\n' > "$legacy_thpm"
   printf '# Omarchy 3.3+ uses colors.toml as the source of truth for theme colors.\n' > "$installed_theme_set"
   printf '#!/usr/bin/env bash\n' > "$hook_dir/00-fish.sh.sample"
+  printf 'checked_at=1\nstatus=update_available\nremote_commit=old\n' > "$update_cache"
 
   make_stub_bin "$bin_dir" pacman 'exit 0'
   make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
@@ -2005,10 +2007,13 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   assert_file_missing "$installed_theme_set" "install removes old thpm theme-set dispatcher"
   assert_file_exists "$installed_theme_env" "install writes shared theme env"
   assert_contains "$(cat "$installed_version")" "commit=local-install-commit" "install records installed commit"
+  assert_file_missing "$update_cache" "install clears stale update availability cache"
   assert_file_exists "$installed_config" "install writes default config.toml"
   assert_contains "$(cat "$installed_config")" "[notifications.restart.apps]" "default config documents restart app controls"
   assert_file_exists "$hook_dir/00-fish.sh.sample" "install preserves disabled plugin as sample"
   assert_file_missing "$hook_dir/00-fish.sh" "install removes active file for disabled plugin"
+  assert_file_exists "$hook_dir/10-branding.sh.sample" "install disables branding plugin by default"
+  assert_file_missing "$hook_dir/10-branding.sh" "install does not enable branding plugin by default"
   assert_file_exists "$hook_dir/30-vscode.sh" "install enables bundled plugins by default"
 }
 
@@ -2088,6 +2093,7 @@ test_install_recovers_all_bundled_plugins_disabled_by_bad_update() {
   assert_file_exists "$hook_dir/30-vscode.sh" "install re-enables vscode after all-disabled update fallout"
   assert_file_exists "$hook_dir/40-zen.sh" "install re-enables zen after all-disabled update fallout"
   assert_file_missing "$hook_dir/00-fish.sh.sample" "install clears fish sample after all-disabled update fallout"
+  assert_file_exists "$hook_dir/10-branding.sh.sample" "install keeps branding disabled after all-disabled update recovery"
   assert_file_missing "$hook_dir/40-zen.sh.sample" "install clears zen sample after all-disabled update fallout"
 }
 
@@ -2146,8 +2152,33 @@ test_install_preserves_mixed_enabled_and_disabled_state() {
   assert_success "$status" "install preserves mixed enabled and disabled state successfully"
   assert_not_contains "$output" "All bundled plugins are disabled" "install does not recover when any bundled hook is enabled"
   assert_file_exists "$hook_dir/00-fish.sh" "install preserves active bundled hook in mixed state"
+  assert_file_exists "$hook_dir/10-branding.sh.sample" "install keeps newly added branding disabled in mixed state"
   assert_file_exists "$hook_dir/30-vscode.sh.sample" "install preserves disabled bundled hook in mixed state"
   assert_file_missing "$hook_dir/30-vscode.sh" "install does not enable disabled bundled hook in mixed state"
+}
+
+test_install_preserves_enabled_branding_plugin() {
+  local home_dir="$TMP_ROOT/install-branding-enabled-home"
+  local bin_dir="$TMP_ROOT/install-branding-enabled-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local status
+
+  rm -f "$TMP_ROOT/install-git-branch.log"
+  rm -f "$TMP_ROOT/install-git-args.log"
+  mkdir -p "$hook_dir" "$bin_dir"
+  printf '#!/usr/bin/env bash\n' > "$hook_dir/10-branding.sh"
+  make_stub_bin "$bin_dir" pacman 'exit 0'
+  make_stub_bin "$bin_dir" sudo 'printf "sudo should not be called\n" >&2; exit 1'
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+  make_stub_bin "$bin_dir" omarchy-show-done 'exit 0'
+  make_install_git_stub "$bin_dir"
+
+  PATH="$bin_dir:$PATH" HOME="$home_dir" "$ROOT_DIR/install.sh" >/dev/null 2>&1
+  status=$?
+
+  assert_success "$status" "install with enabled branding exits successfully"
+  assert_file_exists "$hook_dir/10-branding.sh" "install preserves explicitly enabled branding plugin"
+  assert_file_missing "$hook_dir/10-branding.sh.sample" "install does not disable explicitly enabled branding plugin"
 }
 
 test_install_respects_branch_override() {
@@ -2601,6 +2632,7 @@ main() {
   test_install_recovers_all_bundled_plugins_disabled_by_bad_update
   test_install_recovery_preserves_custom_sample_hooks
   test_install_preserves_mixed_enabled_and_disabled_state
+  test_install_preserves_enabled_branding_plugin
   test_install_respects_branch_override
   test_install_preserves_existing_sample_disabled_plugin
   test_install_disabled_sample_wins_over_stale_active_plugin

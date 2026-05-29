@@ -55,6 +55,10 @@ bundled_plugins=(
     50-heroic.sh
 )
 
+default_disabled_plugins=(
+    10-branding.sh
+)
+
 is_bundled_plugin() {
     local name="$1"
     local plugin
@@ -67,6 +71,7 @@ is_bundled_plugin() {
 }
 
 disabled_plugins=()
+enabled_plugins=()
 enabled_bundled_count=0
 disabled_bundled_count=0
 recover_all_disabled=0
@@ -87,7 +92,19 @@ record_enabled_plugin() {
 
     name=$(basename "$plugin")
     is_bundled_plugin "$name" || return 0
+    enabled_plugins+=("$name")
     enabled_bundled_count=$((enabled_bundled_count + 1))
+}
+
+plugin_was_enabled() {
+    local name="$1"
+    local plugin
+
+    for plugin in "${enabled_plugins[@]}"; do
+        [[ "$plugin" == "$name" ]] && return 0
+    done
+
+    return 1
 }
 
 if [[ -d "$HOME/.config/omarchy/hooks/theme-set.d" ]]; then
@@ -130,6 +147,7 @@ repo=https://github.com/OldJobobo/theme-hook-plugin-manager.git
 branch=$THPM_BRANCH
 commit=$install_commit
 EOF
+rm -f "$HOME/.local/share/thpm/update-check"
 
 # Install default user config without overwriting local edits.
 mkdir -p "$THPM_CONFIG_HOME/thpm"
@@ -196,6 +214,13 @@ if [[ "$recover_all_disabled" -eq 1 ]]; then
         rm -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample"
     done
 fi
+
+for plugin in "${default_disabled_plugins[@]}"; do
+    plugin_was_enabled "$plugin" && continue
+    if [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" ]]; then
+        mv -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample"
+    fi
+done
 
 for plugin in "${disabled_plugins[@]}"; do
     if [[ -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin" ]]; then

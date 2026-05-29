@@ -10,6 +10,7 @@ This release expands the bundled plugin set with several integrations that were 
 - **Foot live colors** for updating existing Foot terminals
 - **Obsidian Terminal** plugin colors
 - **cliamp** theme support
+- **Omarchy branding** sync for theme-provided Fastfetch/About and screensaver logos, installed disabled by default so users can opt in
 
 The supported app list now includes browsers, editors, desktop UI, terminal tools, and game/media apps, with plugins managed through the `thpm` CLI.
 
@@ -21,6 +22,7 @@ This release also fixes several issues that could make the hook frustrating or b
 - Missing `colors.toml` now reports the intended error instead of failing with `error: command not found`
 - `thpm uninstall` now works as documented
 - Uninstall cleanup is best-effort, so missing optional integrations do not abort removal
+- Uninstall restores Omarchy's default About and screensaver branding when those source defaults are available
 - Installer no longer requires `gum`; it falls back to a plain shell prompt
 - `thpm enable <name>` and `thpm disable <name>` now warn when the plugin name does not exist
 - README now documents that updates replace bundled plugin files

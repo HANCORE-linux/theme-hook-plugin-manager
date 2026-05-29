@@ -159,7 +159,7 @@ This matches Omarchy 3.3+ themes.
 
 ## Theme Branding Files
 
-Bundled branding support uses these active-theme files when they exist:
+The bundled branding plugin is installed disabled by default. After `thpm enable branding`, it uses these active-theme files when they exist:
 
 ```text
 ~/.config/omarchy/current/theme/about.txt
