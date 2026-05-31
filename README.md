@@ -69,7 +69,7 @@ Some apps also require one-time selection of the generated Omarchy theme inside 
 
 **Editors and writing:** Cursor, Obsidian Terminal plugin, Typora, VS Code, Windsurf, Zed
 
-**Desktop and UI:** Discord clients using Vencord-compatible themes, GTK apps, nwg-dock-hyprland, Omarchy branding, Qt6 apps using qt6ct, SwayNC, Vicinae
+**Desktop and UI:** Discord clients using Vencord-compatible themes, optional Discord System24 theme, GTK apps, nwg-dock-hyprland, Omarchy branding, Qt6 apps using qt6ct, SwayNC, Vicinae
 
 **Terminal and CLI:** cliamp, Cava, Fish, Foot live colors, fzf, Superfile, tmux
 
@@ -271,6 +271,8 @@ If doctor is clean but Zen is still only partially themed, open `about:profiles`
 ### Discord is not changing
 
 Use a Vencord-compatible client, such as Vesktop or Equibop, then enable the generated theme in that client's theme settings.
+
+`discord-system24` is installed disabled by default as an alternative to `discord`. Enable only one Discord plugin at a time because both install the active client theme as `vencord.theme.css`.
 
 ### Spotify is not changing
 

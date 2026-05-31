@@ -293,7 +293,7 @@ disable_hooks() {
 
 post_enable() {
     case $1 in
-        "discord")
+        "discord"|"discord-system24")
             echo -e "$(dot "yellow")Discord themes cannot be automatically enabled/disabled."
             echo -e "$(dot "muted")Please enable in your Discord client's theme settings panel."
         ;;
@@ -338,7 +338,7 @@ post_enable() {
 
 post_disable() {
     case $1 in
-        "discord")
+        "discord"|"discord-system24")
             echo -e "$(dot "yellow")Discord themes cannot be automatically enabled/disabled."
             echo -e "$(dot "muted")Please enable in your Discord client's theme settings panel."
         ;;
@@ -672,7 +672,7 @@ doctor_check_plugin_specific() {
 
     case "$plugin" in
         fish|fzf) doctor_check_command fish Fish ;;
-        discord)
+        discord|discord-system24)
             doctor_info "Discord/Vencord themes must be enabled inside the client after generation"
             if compgen -G "$HOME/.config/Vencord/themes" >/dev/null ||
                compgen -G "$HOME/.config/vesktop/themes" >/dev/null ||

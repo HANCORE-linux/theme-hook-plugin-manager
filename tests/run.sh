@@ -1124,6 +1124,8 @@ test_branding_plugin_disable_stops_sync_until_enabled() {
 test_hook_plugins_use_portable_assumption_guards() {
   assert_not_contains "$(cat "$ROOT_DIR/theme-set.d/10-discord.sh")" 'themes",' "discord plugin has no comma-suffixed Flatpak path"
   assert_contains "$(cat "$ROOT_DIR/theme-set.d/10-discord.sh")" '$HOME/.var/app/com.discordapp.Discord/config/Vencord/themes' "discord plugin checks user Flatpak Discord path"
+  assert_not_contains "$(cat "$ROOT_DIR/theme-set.d/11-discord-system24.sh")" 'themes",' "discord system24 plugin has no comma-suffixed Flatpak path"
+  assert_contains "$(cat "$ROOT_DIR/theme-set.d/11-discord-system24.sh")" '$HOME/.var/app/com.discordapp.Discord/config/Vencord/themes' "discord system24 plugin checks user Flatpak Discord path"
   assert_contains "$(cat "$ROOT_DIR/theme-set.d/30-vscode.sh")" "command -v jq" "vscode plugin guards jq dependency"
   assert_contains "$(cat "$ROOT_DIR/theme-set.d/30-cursor.sh")" "command -v jq" "cursor plugin guards jq dependency"
   assert_contains "$(cat "$ROOT_DIR/theme-set.d/30-windsurf.sh")" "command -v jq" "windsurf plugin guards jq dependency"
@@ -1135,6 +1137,38 @@ test_hook_plugins_use_portable_assumption_guards() {
   assert_not_contains "$(cat "$ROOT_DIR/theme-set.d/40-qutebrowser.sh")" "grep -oP" "qutebrowser plugin avoids grep -P dependency"
   assert_contains "$(cat "$ROOT_DIR/theme-set.d/35-obsidian-terminal.sh")" "command -v python3" "obsidian terminal plugin guards python3 dependency"
   assert_not_contains "$(cat "$ROOT_DIR/theme-set.d/20-nwg-dock-hyprland.sh")" "eval" "nwg dock plugin avoids eval when restarting dock"
+}
+
+test_discord_system24_plugin_writes_theme_and_installs_existing_clients() {
+  local home_dir="$TMP_ROOT/discord-system24-home"
+  local theme_dir="$home_dir/.config/omarchy/current/theme"
+  local vencord_dir="$home_dir/.config/Vencord/themes"
+  local vesktop_dir="$home_dir/.config/vesktop/themes"
+  local missing_dir="$home_dir/.config/Equicord/themes"
+  local output
+  local generated
+  local installed
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$vencord_dir" "$vesktop_dir"
+  printf 'old theme\n' > "$vencord_dir/vencord.theme.css"
+  printf 'other theme\n' > "$vesktop_dir/other.theme.css"
+
+  output="$(THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" bash "$ROOT_DIR/theme-set.d/11-discord-system24.sh" 2>&1)"
+  generated="$theme_dir/vencord-system24.theme.css"
+  installed="$vencord_dir/vencord.theme.css"
+
+  assert_contains "$output" "Discord System24 theme updated!" "discord system24 plugin reports success"
+  assert_file_exists "$generated" "discord system24 plugin writes generated theme"
+  assert_contains "$(cat "$generated")" '@import url("https://refact0r.github.io/system24/build/system24.css");' "discord system24 plugin imports upstream system24 build"
+  assert_contains "$(cat "$generated")" "--bg-4: #101112;" "discord system24 plugin uses Omarchy background"
+  assert_contains "$(cat "$generated")" "--text-2: #f1f2f3;" "discord system24 plugin uses Omarchy foreground"
+  assert_contains "$(cat "$generated")" "--accent-2: #444444;" "discord system24 plugin maps Omarchy blue accent"
+  assert_contains "$(cat "$generated")" "--online: #222222;" "discord system24 plugin maps Omarchy status colors"
+  assert_eq "$(cat "$generated")" "$(cat "$installed")" "discord system24 plugin installs Vencord theme file"
+  assert_eq "$(cat "$generated")" "$(cat "$vesktop_dir/vencord.theme.css")" "discord system24 plugin installs Vesktop theme file"
+  assert_file_exists "$vesktop_dir/other.theme.css" "discord system24 plugin preserves other theme files"
+  assert_file_missing "$missing_dir" "discord system24 plugin does not create missing client theme directories"
 }
 
 test_browser_plugins_skip_missing_profiles() {
@@ -2014,6 +2048,8 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   assert_file_missing "$hook_dir/00-fish.sh" "install removes active file for disabled plugin"
   assert_file_exists "$hook_dir/10-branding.sh.sample" "install disables branding plugin by default"
   assert_file_missing "$hook_dir/10-branding.sh" "install does not enable branding plugin by default"
+  assert_file_exists "$hook_dir/11-discord-system24.sh.sample" "install disables discord system24 plugin by default"
+  assert_file_missing "$hook_dir/11-discord-system24.sh" "install does not enable discord system24 plugin by default"
   assert_file_exists "$hook_dir/30-vscode.sh" "install enables bundled plugins by default"
 }
 
@@ -2600,6 +2636,7 @@ main() {
   test_branding_plugin_skips_without_theme_branding
   test_branding_plugin_disable_stops_sync_until_enabled
   test_hook_plugins_use_portable_assumption_guards
+  test_discord_system24_plugin_writes_theme_and_installs_existing_clients
   test_browser_plugins_skip_missing_profiles
   test_zen_plugin_uses_managed_imports_and_migrates_legacy_css
   test_zen_plugin_repairs_incomplete_managed_import_block

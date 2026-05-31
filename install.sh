@@ -31,6 +31,7 @@ bundled_plugins=(
     00-fzf.sh
     10-branding.sh
     10-discord.sh
+    11-discord-system24.sh
     10-gtk.sh
     10-qt6ct.sh
     10-spotify.sh
@@ -57,6 +58,7 @@ bundled_plugins=(
 
 default_disabled_plugins=(
     10-branding.sh
+    11-discord-system24.sh
 )
 
 is_bundled_plugin() {
