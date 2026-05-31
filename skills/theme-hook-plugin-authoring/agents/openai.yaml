@@ -1,0 +1,4 @@
+interface:
+  display_name: "Theme Hook Plugin Authoring"
+  short_description: "Author thpm Omarchy theme hook plugins."
+  default_prompt: "Create or review a Theme Hook Plugin Manager plugin for an Omarchy app."
