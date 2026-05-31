@@ -103,26 +103,56 @@ THPM_UPDATE_CHECK="${THPM_UPDATE_CHECK:-$(thpm_config_value updates check true)}
 THPM_THEME_ENV_DEFAULT="${THPM_THEME_ENV:-$(thpm_config_path paths theme_env "$HOME/.local/share/thpm/lib/theme-env.sh")}"
 THPM_COLORS_FILE_DEFAULT="${THPM_COLORS_FILE:-$(thpm_config_path paths colors_file "$HOME/.config/omarchy/current/theme/colors.toml")}"
 
-dot() {
-    dot_char=" "
-    case $1 in
-        green)
-            echo -e "\e[32m$dot_char\e[0m"
-            ;;
-        yellow)
-            echo -e "\033[0;33m$dot_char\e[0m"
-            ;;
-        red)
-            echo -e "\e[31m$dot_char\e[0m"
-            exit 1
-            ;;
-        cyan)
-            echo -e "\e[36m$dot_char\e[0m"
-            ;;
-        muted)
-            echo -e "  "
-            ;;
+thpm_supports_color() {
+    [[ -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]
+}
+
+thpm_tput() {
+    command -v tput >/dev/null 2>&1 || return 1
+    tput "$@" 2>/dev/null
+}
+
+thpm_color() {
+    local role="$1"
+    local slot
+
+    thpm_supports_color || return 0
+    case "$role" in
+        enabled|ok) slot=2 ;;
+        disabled|error) slot=1 ;;
+        warn) slot=3 ;;
+        info) slot=6 ;;
+        muted) slot=8 ;;
+        *) return 0 ;;
     esac
+
+    thpm_tput setaf "$slot" || return 0
+}
+
+thpm_reset() {
+    thpm_supports_color || return 0
+    thpm_tput sgr0 || return 0
+}
+
+thpm_dim() {
+    thpm_supports_color || return 0
+    thpm_tput dim || thpm_color muted
+}
+
+dot() {
+    local role="$1"
+    local dot_char=" "
+
+    if [[ "$role" == "muted" ]]; then
+        printf '  '
+        return 0
+    fi
+
+    printf '%s%s%s' "$(thpm_color "$role")" "$dot_char" "$(thpm_reset)"
+}
+
+muted_text() {
+    printf '%s%s%s' "$(thpm_dim)" "$1" "$(thpm_reset)"
 }
 
 open_hooks_dir() {
@@ -144,7 +174,7 @@ cache_value() {
 }
 
 print_update_notice() {
-    echo -e "\n$(dot "yellow")Update available: run thpm update"
+    printf '\n%sUpdate available: run thpm update\n' "$(dot warn)"
 }
 
 maybe_show_update_notice() {
@@ -222,12 +252,12 @@ get_hook_list() {
 
     echo -e "\nEnabled Plugins:"
     for hook in "${enabled_hooks[@]}"; do
-        echo -e " $(dot "green")$hook"
+        printf ' %s%s\n' "$(dot enabled)" "$hook"
     done
 
     echo -e "\nDisabled Plugins:"
     for hook in "${disabled_hooks[@]}"; do
-        echo -e " $(dot "red")$hook"
+        printf ' %s%s\n' "$(dot disabled)" "$hook"
     done
     maybe_show_update_notice
 }
@@ -249,14 +279,14 @@ enable_hooks() {
                     if [[ "$old_hook" == *.sample ]]; then
                         mv "$old_hook" "$enabled_hook"
                     fi
-                    echo -e "$(dot "green")Plugin Enabled: $hook_name \033[90m($enabled_hook)\033[0m"
+                    printf '%sPlugin Enabled: %s %s\n' "$(dot enabled)" "$hook_name" "$(muted_text "($enabled_hook)")"
                     post_enable "$hook_name"
                     echo
                 fi
             done
         fi
         if [[ "$found" -eq 0 ]]; then
-            echo -e "$(dot "yellow")Plugin not found: $new_hook"
+            printf '%sPlugin not found: %s\n' "$(dot warn)" "$new_hook"
         fi
     done
 }
@@ -279,14 +309,14 @@ disable_hooks() {
                         disabled_hook="$old_hook.sample"
                         mv "$old_hook" "$disabled_hook"
                     fi
-                    echo -e "$(dot "red")Plugin Disabled: $hook_name \033[90m($disabled_hook)\033[0m"
+                    printf '%sPlugin Disabled: %s %s\n' "$(dot disabled)" "$hook_name" "$(muted_text "($disabled_hook)")"
                     post_disable "$hook_name"
                     echo
                 fi
             done
         fi
         if [[ "$found" -eq 0 ]]; then
-            echo -e "$(dot "yellow")Plugin not found: $new_hook"
+            printf '%sPlugin not found: %s\n' "$(dot warn)" "$new_hook"
         fi
     done
 }
@@ -294,12 +324,12 @@ disable_hooks() {
 post_enable() {
     case $1 in
         "discord"|"discord-system24")
-            echo -e "$(dot "yellow")Discord themes cannot be automatically enabled/disabled."
-            echo -e "$(dot "muted")Please enable in your Discord client's theme settings panel."
+            printf '%sDiscord themes cannot be automatically enabled/disabled.\n' "$(dot warn)"
+            printf '%sPlease enable in your Discord client'\''s theme settings panel.\n' "$(dot muted)"
         ;;
         "firefox")
-            echo -e "$(dot "yellow")Firefox themes cannot be automatically enabled/disabled."
-            echo -e "$(dot "muted")Please read the FAQ to disable Firefox theming."
+            printf '%sFirefox themes cannot be automatically enabled/disabled.\n' "$(dot warn)"
+            printf '%sPlease read the FAQ to disable Firefox theming.\n' "$(dot muted)"
         ;;
         "gtk")
             if command -v gsettings >/dev/null 2>&1; then
@@ -329,8 +359,8 @@ post_enable() {
             vicinae theme set omarchy > /dev/null 2>&1
         ;;
         "zen")
-            echo -e "$(dot "yellow")Zen themes apply on the next Omarchy theme change."
-            echo -e "$(dot "muted")Run thpm run to apply it now."
+            printf '%sZen themes apply on the next Omarchy theme change.\n' "$(dot warn)"
+            printf '%sRun thpm run to apply it now.\n' "$(dot muted)"
         ;;
         *) return 0 ;;
     esac
@@ -339,12 +369,12 @@ post_enable() {
 post_disable() {
     case $1 in
         "discord"|"discord-system24")
-            echo -e "$(dot "yellow")Discord themes cannot be automatically enabled/disabled."
-            echo -e "$(dot "muted")Please enable in your Discord client's theme settings panel."
+            printf '%sDiscord themes cannot be automatically enabled/disabled.\n' "$(dot warn)"
+            printf '%sPlease enable in your Discord client'\''s theme settings panel.\n' "$(dot muted)"
         ;;
         "firefox")
-            echo -e "$(dot "yellow")Firefox themes cannot be automatically enabled/disabled."
-            echo -e "$(dot "muted")Please read the FAQ to disable Firefox theming."
+            printf '%sFirefox themes cannot be automatically enabled/disabled.\n' "$(dot warn)"
+            printf '%sPlease read the FAQ to disable Firefox theming.\n' "$(dot muted)"
         ;;
         "gtk")
             if command -v gsettings >/dev/null 2>&1; then
@@ -372,8 +402,8 @@ post_disable() {
         ;;
         "zen")
             cleanup_zen_theme
-            echo -e "$(dot "yellow")Removed THPM-managed Zen theme imports."
-            echo -e "$(dot "muted")Restart Zen Browser to clear active browser chrome styles."
+            printf '%sRemoved THPM-managed Zen theme imports.\n' "$(dot warn)"
+            printf '%sRestart Zen Browser to clear active browser chrome styles.\n' "$(dot muted)"
         ;;
         *) return 0 ;;
     esac
@@ -397,20 +427,16 @@ doctor_warnings=0
 doctor_status() {
     local level="$1"
     local message="$2"
-    local color
+    local role
 
     case "$level" in
-        ok) color="green" ;;
-        warn) color="yellow"; doctor_warnings=$((doctor_warnings + 1)) ;;
-        error) color="red"; doctor_errors=$((doctor_errors + 1)) ;;
-        *) color="cyan" ;;
+        ok) role="ok" ;;
+        warn) role="warn"; doctor_warnings=$((doctor_warnings + 1)) ;;
+        error) role="error"; doctor_errors=$((doctor_errors + 1)) ;;
+        *) role="info" ;;
     esac
 
-    if [[ "$level" == "error" ]]; then
-        printf ' %b%s\n' "\e[31m \e[0m" "$message"
-    else
-        printf ' %s%s\n' "$(dot "$color")" "$message"
-    fi
+    printf ' %s%s\n' "$(dot "$role")" "$message"
 }
 
 doctor_ok() {
@@ -903,15 +929,15 @@ th_help() {
     echo -e "Usage: thpm [command] [plugin]"
     echo
     echo -e "Commands:"
-    echo -e "$(dot "muted")  help       Show this help message"
-    echo -e "$(dot "muted")  doctor     Diagnose thpm and plugin theming issues"
-    echo -e "$(dot "muted")  enable     Enable a plugin"
-    echo -e "$(dot "muted")  disable    Disable a plugin"
-    echo -e "$(dot "muted")  list       List all available plugins"
-    echo -e "$(dot "muted")  open       Open the plugins directory"
-    echo -e "$(dot "muted")  run        Run/execute the theme-set hook"
-    echo -e "$(dot "muted")  update     Update thpm"
-    echo -e "$(dot "muted")  uninstall  Uninstall thpm"
+    printf '%s  help       Show this help message\n' "$(dot muted)"
+    printf '%s  doctor     Diagnose thpm and plugin theming issues\n' "$(dot muted)"
+    printf '%s  enable     Enable a plugin\n' "$(dot muted)"
+    printf '%s  disable    Disable a plugin\n' "$(dot muted)"
+    printf '%s  list       List all available plugins\n' "$(dot muted)"
+    printf '%s  open       Open the plugins directory\n' "$(dot muted)"
+    printf '%s  run        Run/execute the theme-set hook\n' "$(dot muted)"
+    printf '%s  update     Update thpm\n' "$(dot muted)"
+    printf '%s  uninstall  Uninstall thpm\n' "$(dot muted)"
     maybe_show_update_notice
 
 }
