@@ -342,6 +342,19 @@ test_thpm_help() {
   assert_contains "$output" "disable" "thpm help lists disable command"
 }
 
+test_thpm_cli_uses_terminal_palette_roles() {
+  local source
+
+  source="$(cat "$ROOT_DIR/thpm")"
+  assert_contains "$source" "tput \"\$@\"" "thpm CLI colors use terminal capabilities"
+  assert_contains "$source" "thpm_color" "thpm CLI centralizes color rendering"
+  assert_not_contains "$source" 'dot "green"' "thpm CLI does not hard-code green dot role"
+  assert_not_contains "$source" 'dot "red"' "thpm CLI does not hard-code red dot role"
+  assert_not_contains "$source" 'dot "yellow"' "thpm CLI does not hard-code yellow dot role"
+  assert_not_contains "$source" '\e[31m' "thpm CLI avoids raw red ANSI escape"
+  assert_not_contains "$source" '\033[90m' "thpm CLI avoids raw muted ANSI escape"
+}
+
 test_thpm_enable_disable_and_list() {
   local home_dir="$TMP_ROOT/thpm-home"
   local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
@@ -2605,6 +2618,7 @@ main() {
   test_installer_bundled_plugin_inventory_matches_hooks
   test_project_omarchy_default_contract
   test_thpm_help
+  test_thpm_cli_uses_terminal_palette_roles
   test_thpm_enable_disable_and_list
   test_thpm_manages_custom_hooks
   test_thpm_reads_hook_dir_from_config
