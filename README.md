@@ -98,6 +98,7 @@ thpm enable firefox
 thpm disable spotify
 thpm doctor
 thpm run
+thpm install skills
 thpm open
 thpm update
 thpm remove
@@ -110,6 +111,7 @@ thpm remove
 | `thpm disable <name>` | Disable a plugin |
 | `thpm doctor [name]` | Diagnose thpm setup and plugin theming issues |
 | `thpm run` | Ask Omarchy to fire the `theme-set` hook now |
+| `thpm install skills` | Install a bundled agent skill, currently for Codex/OpenAI |
 | `thpm open` | Open the plugin directory |
 | `thpm update` | Re-run the installer |
 | `thpm remove` | Uninstall `thpm` |
@@ -124,7 +126,7 @@ Optional user configuration lives at:
 ${XDG_CONFIG_HOME:-$HOME/.config}/thpm/config.toml
 ```
 
-Set `THPM_CONFIG_FILE=/path/to/config.toml` to use a different file. Existing environment overrides still take priority over config values, including `THPM_HOOK_DIR`, `THPM_STATE_DIR`, `THPM_THEME_ENV`, and `THPM_COLORS_FILE`.
+Set `THPM_CONFIG_FILE=/path/to/config.toml` to use a different file. Existing environment overrides still take priority over config values, including `THPM_HOOK_DIR`, `THPM_STATE_DIR`, `THPM_THEME_ENV`, `THPM_COLORS_FILE`, and `THPM_SKILLS_DIR`.
 
 Example:
 
@@ -134,6 +136,7 @@ hook_dir = "~/.config/omarchy/hooks/theme-set.d"
 state_dir = "~/.local/share/thpm"
 theme_env = "~/.local/share/thpm/lib/theme-env.sh"
 colors_file = "~/.config/omarchy/current/theme/colors.toml"
+skills_dir = "~/.local/share/thpm/skills"
 
 [updates]
 check = true

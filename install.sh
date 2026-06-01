@@ -144,6 +144,11 @@ chmod +x "$HOME/.local/bin/thpm"
 # Install shared thpm hook runtime
 mkdir -p "$HOME/.local/share/thpm/lib"
 mv -f /tmp/theme-hook/lib/theme-env.sh "$HOME/.local/share/thpm/lib/theme-env.sh"
+rm -rf "$HOME/.local/share/thpm/skills"
+if [[ -d /tmp/theme-hook/skills ]]; then
+    mkdir -p "$HOME/.local/share/thpm"
+    cp -R /tmp/theme-hook/skills "$HOME/.local/share/thpm/skills"
+fi
 cat > "$HOME/.local/share/thpm/version" <<EOF
 repo=https://github.com/OldJobobo/theme-hook-plugin-manager.git
 branch=$THPM_BRANCH
@@ -160,6 +165,7 @@ hook_dir = "~/.config/omarchy/hooks/theme-set.d"
 state_dir = "~/.local/share/thpm"
 theme_env = "~/.local/share/thpm/lib/theme-env.sh"
 colors_file = "~/.config/omarchy/current/theme/colors.toml"
+skills_dir = "~/.local/share/thpm/skills"
 
 [updates]
 check = true

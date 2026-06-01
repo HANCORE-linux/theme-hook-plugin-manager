@@ -102,6 +102,11 @@ THPM_UPDATE_CHECK_INTERVAL="${THPM_UPDATE_CHECK_INTERVAL:-$(thpm_config_value up
 THPM_UPDATE_CHECK="${THPM_UPDATE_CHECK:-$(thpm_config_value updates check true)}"
 THPM_THEME_ENV_DEFAULT="${THPM_THEME_ENV:-$(thpm_config_path paths theme_env "$HOME/.local/share/thpm/lib/theme-env.sh")}"
 THPM_COLORS_FILE_DEFAULT="${THPM_COLORS_FILE:-$(thpm_config_path paths colors_file "$HOME/.config/omarchy/current/theme/colors.toml")}"
+THPM_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+THPM_SKILLS_DIR="${THPM_SKILLS_DIR:-$(thpm_config_path paths skills_dir "$THPM_STATE_DIR/skills")}"
+if [[ ! -d "$THPM_SKILLS_DIR" && -d "$THPM_SCRIPT_DIR/skills" ]]; then
+    THPM_SKILLS_DIR="$THPM_SCRIPT_DIR/skills"
+fi
 
 thpm_supports_color() {
     [[ -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]]
@@ -415,6 +420,154 @@ th_run() {
 
 th_install() {
     curl -fsSL https://raw.githubusercontent.com/OldJobobo/theme-hook-plugin-manager/thpm/install.sh | bash
+}
+
+collect_available_skills() {
+    local skill_dir
+    local skills=()
+
+    if [[ -d "$THPM_SKILLS_DIR" ]]; then
+        for skill_dir in "$THPM_SKILLS_DIR"/*; do
+            [[ -f "$skill_dir/SKILL.md" ]] || continue
+            skills+=("$(basename "$skill_dir")")
+        done
+    fi
+
+    if [[ "${#skills[@]}" -gt 0 ]]; then
+        printf '%s\n' "${skills[@]}"
+    fi
+}
+
+skill_exists() {
+    local wanted="$1"
+    local skill
+
+    while IFS= read -r skill; do
+        [[ "$skill" == "$wanted" ]] && return 0
+    done < <(collect_available_skills)
+
+    return 1
+}
+
+prompt_for_skill() {
+    local skills=("$@")
+    local choice
+    local index
+
+    printf 'Available Skills:\n' >&2
+    for index in "${!skills[@]}"; do
+        printf '  %d) %s\n' "$((index + 1))" "${skills[$index]}" >&2
+    done
+    printf '\n' >&2
+    read -r -p "Skill to install: " choice
+
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#skills[@]} )); then
+        printf '%s\n' "${skills[$((choice - 1))]}"
+        return 0
+    fi
+
+    if skill_exists "$choice"; then
+        printf '%s\n' "$choice"
+        return 0
+    fi
+
+    printf '%sUnknown skill: %s\n' "$(dot warn)" "$choice" >&2
+    return 1
+}
+
+normalize_agent_name() {
+    case "$1" in
+        codex|openai|codex-openai|"Codex (OpenAI)")
+            printf 'codex\n'
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+agent_display_name() {
+    case "$1" in
+        codex) printf 'Codex (OpenAI)\n' ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
+agent_skill_root() {
+    case "$1" in
+        codex) printf '%s/skills\n' "${CODEX_HOME:-$HOME/.codex}" ;;
+        *) return 1 ;;
+    esac
+}
+
+prompt_for_agent() {
+    local choice
+
+    printf 'Available Agents:\n' >&2
+    printf '  1) Codex (OpenAI)\n' >&2
+    printf '\n' >&2
+    read -r -p "Agent to install into [1]: " choice
+    choice="${choice:-1}"
+
+    case "$choice" in
+        1|codex|openai|codex-openai)
+            printf 'codex\n'
+            ;;
+        *)
+            printf '%sUnknown agent: %s\n' "$(dot warn)" "$choice" >&2
+            return 1
+            ;;
+    esac
+}
+
+th_install_skills() {
+    local skill_arg="${3:-}"
+    local agent_arg="${4:-}"
+    local skills=()
+    local skill
+    local raw_agent
+    local agent
+    local source_dir
+    local target_root
+    local target_dir
+
+    mapfile -t skills < <(collect_available_skills)
+    if [[ "${#skills[@]}" -eq 0 ]]; then
+        printf '%sNo bundled skills found in %s\n' "$(dot warn)" "$THPM_SKILLS_DIR"
+        return 1
+    fi
+
+    if [[ -n "$skill_arg" ]]; then
+        if ! skill_exists "$skill_arg"; then
+            printf '%sUnknown skill: %s\n' "$(dot warn)" "$skill_arg"
+            return 1
+        fi
+        skill="$skill_arg"
+    else
+        skill="$(prompt_for_skill "${skills[@]}")" || return 1
+    fi
+
+    if [[ -n "$agent_arg" ]]; then
+        raw_agent="$agent_arg"
+        agent="$(normalize_agent_name "$raw_agent")" || {
+            printf '%sUnknown agent: %s\n' "$(dot warn)" "$raw_agent"
+            return 1
+        }
+    else
+        agent="$(prompt_for_agent)" || return 1
+    fi
+
+    source_dir="$THPM_SKILLS_DIR/$skill"
+    target_root="$(agent_skill_root "$agent")" || return 1
+    target_dir="$target_root/$skill"
+
+    mkdir -p "$target_root"
+    rm -rf "$target_dir"
+    cp -R "$source_dir" "$target_dir"
+
+    printf '%sInstalled skill: %s\n' "$(dot ok)" "$skill"
+    printf '%sAgent: %s\n' "$(dot muted)" "$(agent_display_name "$agent")"
+    printf '%sTarget: %s\n' "$(dot muted)" "$target_dir"
 }
 
 th_uninstall() {
@@ -936,6 +1089,7 @@ th_help() {
     printf '%s  list       List all available plugins\n' "$(dot muted)"
     printf '%s  open       Open the plugins directory\n' "$(dot muted)"
     printf '%s  run        Run/execute the theme-set hook\n' "$(dot muted)"
+    printf '%s  install skills  Install a bundled agent skill\n' "$(dot muted)"
     printf '%s  update     Update thpm\n' "$(dot muted)"
     printf '%s  uninstall  Uninstall thpm\n' "$(dot muted)"
     maybe_show_update_notice
@@ -958,6 +1112,15 @@ case $1 in
     disable) disable_hooks "$@" ;;
     off) disable_hooks "$@" ;;
     d) disable_hooks "$@" ;;
+
+    install)
+        if [[ "${2:-}" == "skills" || "${2:-}" == "skill" ]]; then
+            th_install_skills "$@"
+        else
+            th_help
+            exit 1
+        fi
+        ;;
 
     update) th_install ;;
     up) th_install ;;

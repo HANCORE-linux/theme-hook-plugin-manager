@@ -31,6 +31,7 @@ rm -f "$HOME/.local/bin/thpm"
 rm -f "$HOME/.local/share/omarchy/bin/thpm"
 rm -f "$HOME/.local/share/omarchy/bin/thctl"
 rm -f "$HOME/.local/share/thpm/lib/theme-env.sh"
+rm -rf "$HOME/.local/share/thpm/skills"
 rmdir "$HOME/.local/share/thpm/lib" "$HOME/.local/share/thpm" 2>/dev/null || true
 
 if [[ -f "$HOME/.config/omarchy/hooks/theme-set" ]] && grep -Eq 'Omarchy 3\.3\+ uses colors\.toml|Compatibility shim for older thpm installs' "$HOME/.config/omarchy/hooks/theme-set"; then

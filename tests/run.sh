@@ -205,6 +205,7 @@ done
 mkdir -p /tmp/theme-hook
 cp "$ROOT_DIR/thpm" /tmp/theme-hook/thpm
 cp "$ROOT_DIR/theme-set" /tmp/theme-hook/theme-set
+cp -R "$ROOT_DIR/skills" /tmp/theme-hook/skills
 mkdir -p /tmp/theme-hook/lib
 cp "$ROOT_DIR/lib/theme-env.sh" /tmp/theme-hook/lib/theme-env.sh
 mkdir -p /tmp/theme-hook/theme-set.d
@@ -340,6 +341,7 @@ test_thpm_help() {
   assert_contains "$output" "doctor" "thpm help lists doctor command"
   assert_contains "$output" "enable" "thpm help lists enable command"
   assert_contains "$output" "disable" "thpm help lists disable command"
+  assert_contains "$output" "install skills" "thpm help lists skill installer command"
 }
 
 test_thpm_cli_uses_terminal_palette_roles() {
@@ -353,6 +355,38 @@ test_thpm_cli_uses_terminal_palette_roles() {
   assert_not_contains "$source" 'dot "yellow"' "thpm CLI does not hard-code yellow dot role"
   assert_not_contains "$source" '\e[31m' "thpm CLI avoids raw red ANSI escape"
   assert_not_contains "$source" '\033[90m' "thpm CLI avoids raw muted ANSI escape"
+}
+
+test_thpm_install_skills_prompts_and_installs_codex_skill() {
+  local home_dir="$TMP_ROOT/skills-install-home"
+  local output
+  local installed_skill="$home_dir/.codex/skills/theme-hook-plugin-authoring/SKILL.md"
+
+  mkdir -p "$home_dir"
+
+  output="$(printf '1\n1\n' | THPM_SKILLS_DIR="$ROOT_DIR/skills" HOME="$home_dir" XDG_CONFIG_HOME="$home_dir/.config" "$ROOT_DIR/thpm" install skills 2>&1)"
+
+  assert_contains "$output" "Available Skills:" "thpm install skills prompts for bundled skill"
+  assert_contains "$output" "theme-hook-plugin-authoring" "thpm install skills lists bundled skill"
+  assert_contains "$output" "Available Agents:" "thpm install skills prompts for agent"
+  assert_contains "$output" "Codex (OpenAI)" "thpm install skills lists Codex agent"
+  assert_contains "$output" "Installed skill: theme-hook-plugin-authoring" "thpm install skills reports installed skill"
+  assert_file_exists "$installed_skill" "thpm install skills installs SKILL.md into Codex skills"
+}
+
+test_thpm_install_skills_accepts_explicit_skill_and_agent() {
+  local home_dir="$TMP_ROOT/skills-install-explicit-home"
+  local codex_home="$home_dir/custom-codex"
+  local output
+  local installed_skill="$codex_home/skills/theme-hook-plugin-authoring/SKILL.md"
+
+  mkdir -p "$home_dir"
+
+  output="$(THPM_SKILLS_DIR="$ROOT_DIR/skills" CODEX_HOME="$codex_home" HOME="$home_dir" XDG_CONFIG_HOME="$home_dir/.config" "$ROOT_DIR/thpm" install skills theme-hook-plugin-authoring codex 2>&1)"
+
+  assert_contains "$output" "Installed skill: theme-hook-plugin-authoring" "thpm install skills accepts explicit skill"
+  assert_contains "$output" "Target: $codex_home/skills/theme-hook-plugin-authoring" "thpm install skills reports explicit Codex target"
+  assert_file_exists "$installed_skill" "thpm install skills respects CODEX_HOME"
 }
 
 test_thpm_enable_disable_and_list() {
@@ -2023,6 +2057,7 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   local legacy_thpm="$home_dir/.local/share/omarchy/bin/thpm"
   local installed_theme_set="$home_dir/.config/omarchy/hooks/theme-set"
   local installed_theme_env="$home_dir/.local/share/thpm/lib/theme-env.sh"
+  local installed_skill="$home_dir/.local/share/thpm/skills/theme-hook-plugin-authoring/SKILL.md"
   local installed_version="$home_dir/.local/share/thpm/version"
   local update_cache="$home_dir/.local/share/thpm/update-check"
   local installed_config="$home_dir/.config/thpm/config.toml"
@@ -2053,9 +2088,11 @@ test_install_preserves_disabled_plugins_and_installs_files() {
   assert_file_missing "$legacy_thpm" "install removes legacy omarchy bin thpm"
   assert_file_missing "$installed_theme_set" "install removes old thpm theme-set dispatcher"
   assert_file_exists "$installed_theme_env" "install writes shared theme env"
+  assert_file_exists "$installed_skill" "install writes bundled agent skills"
   assert_contains "$(cat "$installed_version")" "commit=local-install-commit" "install records installed commit"
   assert_file_missing "$update_cache" "install clears stale update availability cache"
   assert_file_exists "$installed_config" "install writes default config.toml"
+  assert_contains "$(cat "$installed_config")" "skills_dir = \"~/.local/share/thpm/skills\"" "default config documents bundled skills path"
   assert_contains "$(cat "$installed_config")" "[notifications.restart.apps]" "default config documents restart app controls"
   assert_file_exists "$hook_dir/00-fish.sh.sample" "install preserves disabled plugin as sample"
   assert_file_missing "$hook_dir/00-fish.sh" "install removes active file for disabled plugin"
@@ -2619,6 +2656,8 @@ main() {
   test_project_omarchy_default_contract
   test_thpm_help
   test_thpm_cli_uses_terminal_palette_roles
+  test_thpm_install_skills_prompts_and_installs_codex_skill
+  test_thpm_install_skills_accepts_explicit_skill_and_agent
   test_thpm_enable_disable_and_list
   test_thpm_manages_custom_hooks
   test_thpm_reads_hook_dir_from_config
