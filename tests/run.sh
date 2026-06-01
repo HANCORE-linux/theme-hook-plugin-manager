@@ -1216,6 +1216,8 @@ test_discord_system24_plugin_writes_theme_and_installs_existing_clients() {
   assert_contains "$(cat "$generated")" "--text-5: #5b5b5b;" "discord system24 plugin keeps read channel text dim"
   assert_contains "$(cat "$generated")" "--text-muted: var(--text-5);" "discord system24 plugin maps native Discord muted text to dim role"
   assert_contains "$(cat "$generated")" "--channels-default: var(--text-5);" "discord system24 plugin keeps read channels dim"
+  assert_contains "$(cat "$generated")" ':not([class*="modeUnread"]):not([class*="modeSelected"]):not([class*="modeConnected"]):not(:hover)' "discord system24 plugin only dims read channel rows"
+  assert_contains "$(cat "$generated")" 'color: var(--text-5) !important;' "discord system24 plugin forces dim read channel text"
   assert_contains "$(cat "$generated")" "--background-primary: var(--bg-4);" "discord system24 plugin maps native Discord background"
   assert_contains "$(cat "$generated")" "--blue-2: #cccccc;" "discord system24 plugin lifts System24 color family roles"
   assert_eq "$(cat "$generated")" "$(cat "$installed")" "discord system24 plugin installs Vencord theme file"

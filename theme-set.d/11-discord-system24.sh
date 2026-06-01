@@ -247,6 +247,12 @@ body {
     --purple-4: #${purple_4};
     --purple-5: #${purple_5};
 }
+
+:is([class*="containerDefault_"], [class*="containerDragAfter_"], [class*="containerDragBefore_"])
+    [class*="wrapper_"]:not([class*="modeUnread"]):not([class*="modeSelected"]):not([class*="modeConnected"]):not(:hover)
+    :is([class*="name_"], [class*="icon_"]) {
+    color: var(--text-5) !important;
+}
 EOF
 }
 
