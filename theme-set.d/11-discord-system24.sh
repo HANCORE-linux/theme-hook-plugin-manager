@@ -59,8 +59,8 @@ create_dynamic_theme() {
     bg_2="$(change_shade "$primary_background" 18)"
     bg_3="$(change_shade "$primary_background" 8)"
     bg_4="$primary_background"
-    text_4="$(visible_color "$bright_black" "$normal_white" 118)"
-    text_5="$(visible_color "$(change_shade "$bright_black" -35)" "$bright_black" 92)"
+    text_4="$(visible_color "$(change_shade "$bright_black" -20)" "$bright_black" 100)"
+    text_5="$(visible_color "$(change_shade "$bright_black" -45)" "$bright_black" 78)"
     accent_1="$(visible_color "$bright_blue" "$normal_blue" 150)"
     accent_2="$(visible_color "$normal_blue" "$bright_blue" 115)"
     accent_4="$(visible_color "$bright_blue" "$normal_blue" 125)"
@@ -198,13 +198,15 @@ body {
     --offline: #${offline};
 
     --text-normal: var(--text-2);
-    --text-muted: var(--text-4);
+    --text-muted: var(--text-5);
     --header-primary: var(--text-1);
     --header-secondary: var(--text-3);
-    --interactive-normal: var(--text-3);
+    --interactive-normal: var(--text-4);
     --interactive-hover: var(--text-2);
     --interactive-active: var(--text-1);
     --interactive-muted: var(--text-5);
+    --channels-default: var(--text-5);
+    --channel-icon: var(--text-5);
     --background-primary: var(--bg-4);
     --background-secondary: var(--bg-3);
     --background-secondary-alt: var(--bg-2);
