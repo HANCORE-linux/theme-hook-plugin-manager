@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC1091,SC2154
+# shellcheck source=../lib/theme-env.sh
 source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
 
 output_file="$HOME/.config/omarchy/current/theme/vencord.theme.css"
@@ -43,17 +45,17 @@ cat > "$output_file" << EOF
         --color15: #${normal_yellow};
     }
 EOF
+}
+
+install_theme() {
+    local path file
 
     for path in "${possible_paths[@]}"; do
-        if [ -d "$path" ]; then
-
-            if [[ -f "$path/vencord.theme.css" ]]; then
-                rm "$path/vencord.theme.css"
-            fi
-            cp "$output_file" "$path/vencord.theme.css"
+        if [[ -d "$path" ]]; then
+            cp -f "$output_file" "$path/vencord.theme.css"
 
             for file in "$path"/*; do
-                if [ -f "$file" ]; then
+                if [[ -f "$file" ]]; then
                     touch "$file"
                 fi
             done
@@ -61,27 +63,7 @@ EOF
     done
 }
 
-check_for_theme() {
-    if [[ -f $HOME/.config/omarchy/current/theme/vencord.theme.css ]]; then
-        for path in "${possible_paths[@]}"; do
-            if [ -d "$path" ]; then
-                if [[ -f "$path/vencord.theme.css" ]]; then
-                    rm "$path/vencord.theme.css"
-                fi
-                cp -f "$HOME/.config/omarchy/current/theme/vencord.theme.css" "$path/vencord.theme.css"
-            fi
-
-            for file in "$path"/*; do
-                if [ -f "$file" ]; then
-                    touch "$file"
-                fi
-            done
-        done
-    else
-        create_dynamic_theme
-    fi
-}
-
-check_for_theme
+create_dynamic_theme
+install_theme
 success "Discord theme updated!"
 exit 0

@@ -415,6 +415,28 @@ test_thpm_enable_disable_and_list() {
   assert_contains "$output" "Plugin not found: missing-plugin" "thpm enable reports missing plugin"
 }
 
+test_thpm_discord_plugins_are_mutually_exclusive() {
+  local home_dir="$TMP_ROOT/thpm-discord-mutual-home"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+
+  mkdir -p "$hook_dir"
+  cp "$ROOT_DIR/theme-set.d/10-discord.sh" "$hook_dir/10-discord.sh"
+  cp "$ROOT_DIR/theme-set.d/11-discord-system24.sh" "$hook_dir/11-discord-system24.sh.sample"
+
+  output="$(run_thpm "$home_dir" enable discord-system24)"
+  assert_contains "$output" "Plugin Enabled: discord-system24" "thpm enables discord system24 plugin"
+  assert_contains "$output" "Disabled conflicting Discord plugin: discord" "thpm disables plain discord when enabling system24"
+  assert_file_exists "$hook_dir/10-discord.sh.sample" "thpm moves plain discord to sample when system24 is enabled"
+  assert_file_exists "$hook_dir/11-discord-system24.sh" "thpm enables discord system24 hook"
+
+  output="$(run_thpm "$home_dir" enable discord)"
+  assert_contains "$output" "Plugin Enabled: discord" "thpm enables plain discord plugin"
+  assert_contains "$output" "Disabled conflicting Discord plugin: discord-system24" "thpm disables system24 when enabling plain discord"
+  assert_file_exists "$hook_dir/10-discord.sh" "thpm enables plain discord hook"
+  assert_file_exists "$hook_dir/11-discord-system24.sh.sample" "thpm moves discord system24 to sample when plain discord is enabled"
+}
+
 test_thpm_manages_custom_hooks() {
   local home_dir="$TMP_ROOT/thpm-custom-home"
   local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
@@ -1224,6 +1246,27 @@ test_discord_system24_plugin_writes_theme_and_installs_existing_clients() {
   assert_eq "$(cat "$generated")" "$(cat "$vesktop_dir/vencord.theme.css")" "discord system24 plugin installs Vesktop theme file"
   assert_file_exists "$vesktop_dir/other.theme.css" "discord system24 plugin preserves other theme files"
   assert_file_missing "$missing_dir" "discord system24 plugin does not create missing client theme directories"
+}
+
+test_discord_plugin_regenerates_plain_theme_when_switching_back() {
+  local home_dir="$TMP_ROOT/discord-plain-switchback-home"
+  local theme_dir="$home_dir/.config/omarchy/current/theme"
+  local vesktop_dir="$home_dir/.config/vesktop/themes"
+  local generated
+  local installed
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$vesktop_dir"
+  generated="$theme_dir/vencord.theme.css"
+  installed="$vesktop_dir/vencord.theme.css"
+  printf '@import url("https://refact0r.github.io/system24/build/system24.css");\n' > "$generated"
+  printf '@import url("https://refact0r.github.io/system24/build/system24.css");\n' > "$installed"
+
+  THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" bash "$ROOT_DIR/theme-set.d/10-discord.sh" >/dev/null 2>&1
+
+  assert_contains "$(cat "$generated")" "base16-discord" "discord plugin regenerates plain Base16 Discord source"
+  assert_not_contains "$(cat "$generated")" "system24" "discord plugin replaces stale System24 source"
+  assert_eq "$(cat "$generated")" "$(cat "$installed")" "discord plugin overwrites client theme when switching back"
 }
 
 test_browser_plugins_skip_missing_profiles() {
@@ -2667,6 +2710,7 @@ main() {
   test_thpm_install_skills_prompts_and_installs_codex_skill
   test_thpm_install_skills_accepts_explicit_skill_and_agent
   test_thpm_enable_disable_and_list
+  test_thpm_discord_plugins_are_mutually_exclusive
   test_thpm_manages_custom_hooks
   test_thpm_reads_hook_dir_from_config
   test_thpm_env_hook_dir_overrides_config
@@ -2698,6 +2742,7 @@ main() {
   test_branding_plugin_disable_stops_sync_until_enabled
   test_hook_plugins_use_portable_assumption_guards
   test_discord_system24_plugin_writes_theme_and_installs_existing_clients
+  test_discord_plugin_regenerates_plain_theme_when_switching_back
   test_browser_plugins_skip_missing_profiles
   test_zen_plugin_uses_managed_imports_and_migrates_legacy_css
   test_zen_plugin_repairs_incomplete_managed_import_block
