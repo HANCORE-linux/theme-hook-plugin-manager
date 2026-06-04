@@ -3,7 +3,9 @@
 # shellcheck source=../lib/theme-env.sh
 source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
 
-output_file="$HOME/.config/omarchy/current/theme/vencord.theme.css"
+theme_file="$HOME/.config/omarchy/current/theme/vencord.theme.css"
+theme_name_file="$HOME/.config/omarchy/current/theme.name"
+generated_file="$THPM_STATE_DIR/discord/vencord-base16.theme.css"
 possible_paths=(
     "$HOME/.config/Vencord/themes"
     "$HOME/.config/vesktop/themes"
@@ -14,9 +16,30 @@ possible_paths=(
     "$HOME/.var/app/io.github.equicord.equibop/config/equibop/themes"
 )
 
-create_dynamic_theme() {
+theme_source_file() {
+    local theme_name
+    local source_dir
 
-cat > "$output_file" << EOF
+    [[ -f "$theme_name_file" ]] || return 1
+    IFS= read -r theme_name < "$theme_name_file"
+    [[ -n "$theme_name" ]] || return 1
+
+    for source_dir in \
+        "$HOME/.config/omarchy/themes/$theme_name" \
+        "${OMARCHY_PATH:-$HOME/.local/share/omarchy}/themes/$theme_name"; do
+        if [[ -f "$source_dir/vencord.theme.css" ]]; then
+            printf '%s\n' "$source_dir/vencord.theme.css"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+create_dynamic_theme() {
+    mkdir -p "$(dirname "$generated_file")"
+
+    cat > "$generated_file" << EOF
     /**
     * @name Match System
     * @author @bypass_
@@ -48,11 +71,12 @@ EOF
 }
 
 install_theme() {
+    local source_file="$1"
     local path file
 
     for path in "${possible_paths[@]}"; do
         if [[ -d "$path" ]]; then
-            cp -f "$output_file" "$path/vencord.theme.css"
+            cp -f "$source_file" "$path/vencord.theme.css"
 
             for file in "$path"/*; do
                 if [[ -f "$file" ]]; then
@@ -63,7 +87,16 @@ install_theme() {
     done
 }
 
-create_dynamic_theme
-install_theme
+source_file="$(theme_source_file || true)"
+
+if [[ -n "$source_file" ]]; then
+    cp -f "$source_file" "$theme_file"
+    install_theme "$source_file"
+elif [[ -f "$theme_file" ]]; then
+    install_theme "$theme_file"
+else
+    create_dynamic_theme
+    install_theme "$generated_file"
+fi
 success "Discord theme updated!"
 exit 0

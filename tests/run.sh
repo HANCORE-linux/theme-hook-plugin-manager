@@ -1248,25 +1248,78 @@ test_discord_system24_plugin_writes_theme_and_installs_existing_clients() {
   assert_file_missing "$missing_dir" "discord system24 plugin does not create missing client theme directories"
 }
 
-test_discord_plugin_regenerates_plain_theme_when_switching_back() {
+test_discord_plugin_installs_theme_css_when_switching_back() {
   local home_dir="$TMP_ROOT/discord-plain-switchback-home"
   local theme_dir="$home_dir/.config/omarchy/current/theme"
+  local state_dir="$home_dir/.local/share/thpm"
+  local vesktop_dir="$home_dir/.config/vesktop/themes"
+  local theme_css
+  local generated
+  local installed
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$vesktop_dir"
+  theme_css="$theme_dir/vencord.theme.css"
+  generated="$state_dir/discord/vencord-base16.theme.css"
+  installed="$vesktop_dir/vencord.theme.css"
+  printf '/* theme supplied vencord css */\n.theme-marker { color: #123456; }\n' > "$theme_css"
+  printf '@import url("https://refact0r.github.io/system24/build/system24.css");\n' > "$installed"
+
+  THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" THPM_STATE_DIR="$state_dir" HOME="$home_dir" bash "$ROOT_DIR/theme-set.d/10-discord.sh" >/dev/null 2>&1
+
+  assert_contains "$(cat "$theme_css")" "theme supplied vencord css" "discord plugin preserves current theme Vencord source"
+  assert_file_missing "$generated" "discord plugin skips Base16 fallback when theme Vencord CSS exists"
+  assert_not_contains "$(cat "$installed")" "system24" "discord plugin replaces stale System24 client theme"
+  assert_eq "$(cat "$theme_css")" "$(cat "$installed")" "discord plugin installs current theme Vencord CSS when switching back"
+}
+
+test_discord_plugin_repairs_stale_current_css_from_theme_source() {
+  local home_dir="$TMP_ROOT/discord-stale-current-home"
+  local theme_dir="$home_dir/.config/omarchy/current/theme"
+  local source_dir="$home_dir/.config/omarchy/themes/noir"
+  local state_dir="$home_dir/.local/share/thpm"
+  local vesktop_dir="$home_dir/.config/vesktop/themes"
+  local source_css
+  local current_css
+  local generated
+  local installed
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$source_dir" "$vesktop_dir"
+  printf 'noir\n' > "$home_dir/.config/omarchy/current/theme.name"
+  source_css="$source_dir/vencord.theme.css"
+  current_css="$theme_dir/vencord.theme.css"
+  generated="$state_dir/discord/vencord-base16.theme.css"
+  installed="$vesktop_dir/vencord.theme.css"
+  printf '/* Noir System24 source */\n@import url("https://refact0r.github.io/system24/build/system24.css");\n' > "$source_css"
+  printf '@import url("https://imbypass.github.io/base16-discord/omarchy-discord.theme.css");\n' > "$current_css"
+  printf '@import url("https://imbypass.github.io/base16-discord/omarchy-discord.theme.css");\n' > "$installed"
+
+  THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" THPM_STATE_DIR="$state_dir" HOME="$home_dir" bash "$ROOT_DIR/theme-set.d/10-discord.sh" >/dev/null 2>&1
+
+  assert_file_missing "$generated" "discord plugin does not generate Base16 fallback when named theme source exists"
+  assert_eq "$(cat "$source_css")" "$(cat "$current_css")" "discord plugin repairs stale current Vencord CSS from named theme source"
+  assert_eq "$(cat "$source_css")" "$(cat "$installed")" "discord plugin installs repaired named theme Vencord CSS"
+}
+
+test_discord_plugin_generates_base16_fallback_without_theme_css() {
+  local home_dir="$TMP_ROOT/discord-base16-fallback-home"
+  local theme_dir="$home_dir/.config/omarchy/current/theme"
+  local state_dir="$home_dir/.local/share/thpm"
   local vesktop_dir="$home_dir/.config/vesktop/themes"
   local generated
   local installed
 
   write_colors_fixture "$home_dir"
   mkdir -p "$vesktop_dir"
-  generated="$theme_dir/vencord.theme.css"
+  generated="$state_dir/discord/vencord-base16.theme.css"
   installed="$vesktop_dir/vencord.theme.css"
-  printf '@import url("https://refact0r.github.io/system24/build/system24.css");\n' > "$generated"
-  printf '@import url("https://refact0r.github.io/system24/build/system24.css");\n' > "$installed"
 
-  THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" bash "$ROOT_DIR/theme-set.d/10-discord.sh" >/dev/null 2>&1
+  THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" THPM_STATE_DIR="$state_dir" HOME="$home_dir" bash "$ROOT_DIR/theme-set.d/10-discord.sh" >/dev/null 2>&1
 
-  assert_contains "$(cat "$generated")" "base16-discord" "discord plugin regenerates plain Base16 Discord source"
-  assert_not_contains "$(cat "$generated")" "system24" "discord plugin replaces stale System24 source"
-  assert_eq "$(cat "$generated")" "$(cat "$installed")" "discord plugin overwrites client theme when switching back"
+  assert_file_missing "$theme_dir/vencord.theme.css" "discord plugin does not create fallback CSS inside current theme"
+  assert_contains "$(cat "$generated")" "base16-discord" "discord plugin generates Base16 fallback source"
+  assert_eq "$(cat "$generated")" "$(cat "$installed")" "discord plugin installs generated Base16 fallback"
 }
 
 test_browser_plugins_skip_missing_profiles() {
@@ -2742,7 +2795,9 @@ main() {
   test_branding_plugin_disable_stops_sync_until_enabled
   test_hook_plugins_use_portable_assumption_guards
   test_discord_system24_plugin_writes_theme_and_installs_existing_clients
-  test_discord_plugin_regenerates_plain_theme_when_switching_back
+  test_discord_plugin_installs_theme_css_when_switching_back
+  test_discord_plugin_repairs_stale_current_css_from_theme_source
+  test_discord_plugin_generates_base16_fallback_without_theme_css
   test_browser_plugins_skip_missing_profiles
   test_zen_plugin_uses_managed_imports_and_migrates_legacy_css
   test_zen_plugin_repairs_incomplete_managed_import_block
