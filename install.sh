@@ -49,6 +49,7 @@ bundled_plugins=(
     35-obsidian-terminal.sh
     40-cava.sh
     40-firefox.sh
+    40-hermes.sh
     40-qutebrowser.sh
     40-steam.sh
     40-zen.sh
@@ -194,6 +195,7 @@ windsurf = true
 typora = true
 heroic = true
 spf = true
+Hermes = true
 EOF
 fi
 

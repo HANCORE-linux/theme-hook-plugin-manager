@@ -170,6 +170,16 @@ The bundled branding plugin is installed disabled by default. After `thpm enable
 
 Disabling the branding plugin only stops future syncs. Uninstalling `thpm` restores Omarchy's current source defaults from `~/.local/share/omarchy/icon.txt` and `~/.local/share/omarchy/logo.txt` when those files are present.
 
+## Hermes Theme File
+
+The bundled Hermes plugin generates:
+
+```text
+~/.config/Hermes/omarchy-theme.json
+```
+
+The generated theme is named `omarchy-current` and labeled `Omarchy Current`. Users should select it inside Hermes, then restart Hermes after `thpm run` or a theme change so the app reloads the generated colors.
+
 ## Doctor Checks
 
 `thpm doctor` is read-only. It checks the Omarchy hook directory, the shared

@@ -69,7 +69,7 @@ Some apps also require one-time selection of the generated Omarchy theme inside 
 
 **Editors and writing:** Cursor, Obsidian Terminal plugin, Typora, VS Code, Windsurf, Zed
 
-**Desktop and UI:** Discord clients using Vencord-compatible themes, optional Discord System24 theme, GTK apps, nwg-dock-hyprland, Omarchy branding, Qt6 apps using qt6ct, SwayNC, Vicinae
+**Desktop and UI:** Discord clients using Vencord-compatible themes, optional Discord System24 theme, GTK apps, Hermes, nwg-dock-hyprland, Omarchy branding, Qt6 apps using qt6ct, SwayNC, Vicinae
 
 **Terminal and CLI:** cliamp, Cava, Fish, Foot live colors, fzf, Superfile, tmux
 
@@ -165,6 +165,7 @@ windsurf = true
 typora = true
 heroic = true
 spf = true
+Hermes = true
 ```
 
 Restart notification app keys match the process name passed by a plugin to `require_restart`, for example `steam`, `nautilus`, or `zen-browser`.
@@ -244,6 +245,16 @@ thpm run
 ```
 
 Some apps require selecting the generated Omarchy theme in their own settings.
+
+### Hermes is not changing
+
+The Hermes plugin writes the current Omarchy theme to:
+
+```text
+~/.config/Hermes/omarchy-theme.json
+```
+
+Select the generated `Omarchy Current` theme inside Hermes, then restart Hermes after `thpm run` or a theme change.
 
 ### `colors.toml not found`
 

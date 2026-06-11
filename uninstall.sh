@@ -61,6 +61,7 @@ bundled_plugins=(
     35-obsidian-terminal.sh
     40-cava.sh
     40-firefox.sh
+    40-hermes.sh
     40-qutebrowser.sh
     40-steam.sh
     40-zen.sh
@@ -108,6 +109,9 @@ if command -v qutebrowser >/dev/null 2>&1; then
         sed -i '/omarchy\.draw\.apply(c)/d' "$config_file"
     fi
 fi
+
+# Remove Hermes theme
+rm -f "$HOME/.config/Hermes/omarchy-theme.json"
 
 # Remove Vicinae theme
 if command -v vicinae >/dev/null 2>&1; then
