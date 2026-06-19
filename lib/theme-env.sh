@@ -275,6 +275,9 @@ export bright_black bright_red bright_green bright_yellow bright_blue bright_mag
 
 rgb_primary_foreground=$(hex2rgb "$primary_foreground")
 rgb_primary_background=$(hex2rgb "$primary_background")
+rgb_cursor_color=$(hex2rgb "$cursor_color")
+rgb_selection_foreground=$(hex2rgb "$selection_foreground")
+rgb_selection_background=$(hex2rgb "$selection_background")
 rgb_normal_black=$(hex2rgb "$normal_black")
 rgb_normal_red=$(hex2rgb "$normal_red")
 rgb_normal_green=$(hex2rgb "$normal_green")
@@ -292,6 +295,6 @@ rgb_bright_magenta=$(hex2rgb "$bright_magenta")
 rgb_bright_cyan=$(hex2rgb "$bright_cyan")
 rgb_bright_white=$(hex2rgb "$bright_white")
 
-export rgb_primary_foreground rgb_primary_background
+export rgb_primary_foreground rgb_primary_background rgb_cursor_color rgb_selection_foreground rgb_selection_background
 export rgb_normal_black rgb_normal_red rgb_normal_green rgb_normal_yellow rgb_normal_blue rgb_normal_magenta rgb_normal_cyan rgb_normal_white
 export rgb_bright_black rgb_bright_red rgb_bright_green rgb_bright_yellow rgb_bright_blue rgb_bright_magenta rgb_bright_cyan rgb_bright_white

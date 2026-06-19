@@ -75,6 +75,12 @@ for zen_hook in "$HOME"/.config/omarchy/hooks/theme-set.d/*-zen.sh "$HOME"/.conf
     break
 done
 
+for firefox_hook in "$HOME"/.config/omarchy/hooks/theme-set.d/*-firefox.sh "$HOME"/.config/omarchy/hooks/theme-set.d/*-firefox.sh.sample; do
+    [[ -f "$firefox_hook" ]] || continue
+    bash "$firefox_hook" --cleanup > /dev/null 2>&1 || true
+    break
+done
+
 for plugin in "${bundled_plugins[@]}"; do
     rm -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin"
     rm -f "$HOME/.config/omarchy/hooks/theme-set.d/$plugin.sample"

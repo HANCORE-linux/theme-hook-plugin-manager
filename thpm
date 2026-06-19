@@ -237,6 +237,16 @@ cleanup_zen_theme() {
     done
 }
 
+cleanup_firefox_theme() {
+    local hook
+
+    for hook in "$HOOK_DIR"/*-firefox.sh "$HOOK_DIR"/*-firefox.sh.sample; do
+        [[ -f "$hook" ]] || continue
+        bash "$hook" --cleanup >/dev/null 2>&1 || true
+        return 0
+    done
+}
+
 disable_conflicting_discord_plugin() {
     local enabled_plugin="$1"
     local conflicting_plugin
@@ -362,8 +372,8 @@ post_enable() {
             printf '%sPlease enable in your Discord client'\''s theme settings panel.\n' "$(dot muted)"
         ;;
         "firefox")
-            printf '%sFirefox themes cannot be automatically enabled/disabled.\n' "$(dot warn)"
-            printf '%sPlease read the FAQ to disable Firefox theming.\n' "$(dot muted)"
+            printf '%sFirefox themes apply on the next Omarchy theme change.\n' "$(dot warn)"
+            printf '%sRun thpm run to apply it now.\n' "$(dot muted)"
         ;;
         "gtk")
             if command -v gsettings >/dev/null 2>&1; then
@@ -407,8 +417,9 @@ post_disable() {
             printf '%sPlease enable in your Discord client'\''s theme settings panel.\n' "$(dot muted)"
         ;;
         "firefox")
-            printf '%sFirefox themes cannot be automatically enabled/disabled.\n' "$(dot warn)"
-            printf '%sPlease read the FAQ to disable Firefox theming.\n' "$(dot muted)"
+            cleanup_firefox_theme
+            printf '%sRemoved THPM-managed Firefox theme imports.\n' "$(dot warn)"
+            printf '%sRestart Firefox to clear active browser chrome styles.\n' "$(dot muted)"
         ;;
         "gtk")
             if command -v gsettings >/dev/null 2>&1; then
@@ -875,6 +886,20 @@ doctor_check_editor_theme_extension() {
     fi
 }
 
+doctor_hook_sources_runtime() {
+    local hook="$1"
+
+    awk '
+        /^[[:space:]]*#/ { next }
+        /^[[:space:]]*(source|\.)[[:space:]]+/ &&
+            ($0 ~ /THPM_THEME_ENV/ || $0 ~ /\/\.local\/share\/thpm\/lib\/theme-env\.sh/) {
+            found = 1
+            exit
+        }
+        END { exit found ? 0 : 1 }
+    ' "$hook"
+}
+
 doctor_check_plugin_specific() {
     local plugin="$1"
 
@@ -997,7 +1022,7 @@ doctor_check_plugin() {
         doctor_error "shell syntax fails: $hook"
     fi
 
-    if grep -Eq 'THPM_THEME_ENV|/\.local/share/thpm/lib/theme-env\.sh' "$hook"; then
+    if doctor_hook_sources_runtime "$hook"; then
         doctor_ok "sources shared thpm runtime"
     else
         doctor_warn "does not appear to source shared thpm runtime"

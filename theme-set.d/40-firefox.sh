@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
-
-output_file="$HOME/.config/omarchy/current/theme/firefox.css"
-
-if ! command -v firefox >/dev/null 2>&1; then
-    skipped "Firefox"
-fi
+# shellcheck disable=SC1090,SC1091,SC2154
+# shellcheck source=../lib/theme-env.sh
 
 find_default_profile() {
     [[ -f "$HOME/.mozilla/firefox/profiles.ini" ]] || return 1
@@ -14,8 +9,158 @@ find_default_profile() {
         in_install && /^Default=/ { print $2; exit }
     ' "$HOME/.mozilla/firefox/profiles.ini"
 }
+
 default_profile="$HOME/.mozilla/firefox/$(find_default_profile)"
-[[ -n "${default_profile##"$HOME/.mozilla/firefox/"}" && -d "$default_profile" ]] || skipped "Firefox profile"
+chrome_dir="$default_profile/chrome"
+user_chrome_file="$chrome_dir/userChrome.css"
+user_content_file="$chrome_dir/userContent.css"
+managed_colors_file="$chrome_dir/thpm-firefox-colors.css"
+managed_chrome_file="$chrome_dir/thpm-firefox-userChrome.css"
+managed_content_file="$chrome_dir/thpm-firefox-userContent.css"
+legacy_colors_file="$chrome_dir/colors.css"
+import_start="/* THPM Firefox hook start */"
+import_end="/* THPM Firefox hook end */"
+
+is_default_profile_valid() {
+    [[ -n "${default_profile##"$HOME/.mozilla/firefox/"}" && -d "$default_profile" ]]
+}
+
+backup_once() {
+    local file="$1"
+    local backup_file="${file}.thpm-migrated.bak"
+
+    [[ -f "$backup_file" ]] || cp "$file" "$backup_file"
+}
+
+remove_managed_import_block() {
+    local file="$1"
+    local tmp_file
+
+    [[ -f "$file" ]] || return 0
+    tmp_file="${file}.thpm-tmp"
+    awk -v start="$import_start" -v end="$import_end" '
+        $0 == start { skip=1; next }
+        $0 == end { skip=0; next }
+        !skip { print }
+    ' "$file" > "$tmp_file"
+    mv "$tmp_file" "$file"
+}
+
+write_import_block() {
+    local file="$1"
+    shift
+    local target
+
+    {
+        printf '%s\n' "$import_start"
+        for target in "$@"; do
+            printf '@import url("./%s");\n' "$target"
+        done
+        printf '%s\n' "$import_end"
+    } > "$file"
+}
+
+has_managed_imports() {
+    local file="$1"
+    shift
+    local target
+
+    [[ -f "$file" ]] || return 1
+    grep -Fq "$import_start" "$file" || return 1
+    grep -Fq "$import_end" "$file" || return 1
+    for target in "$@"; do
+        grep -Fq "$target" "$file" || return 1
+    done
+}
+
+ensure_managed_import_block() {
+    local file="$1"
+    shift
+    local tmp_file
+
+    mkdir -p "$(dirname "$file")"
+    if has_managed_imports "$file" "$@"; then
+        return 0
+    fi
+
+    if [[ -f "$file" ]]; then
+        tmp_file="${file}.thpm-new"
+        write_import_block "$tmp_file" "$@"
+        printf '\n' >> "$tmp_file"
+        remove_managed_import_block "$file"
+        cat "$file" >> "$tmp_file"
+        mv "$tmp_file" "$file"
+    else
+        write_import_block "$file" "$@"
+    fi
+}
+
+looks_like_legacy_user_chrome() {
+    local file="$1"
+
+    [[ -f "$file" ]] || return 1
+    grep -Fq '@import url("./colors.css");' "$file" || return 1
+    grep -Fq -- "--panel-separator-zap-gradient" "$file" || return 1
+    grep -Fq -- "--arrowpanel-background" "$file" || return 1
+    grep -Fq -- "--urlbar-box-bgcolor" "$file" || return 1
+}
+
+looks_like_legacy_user_content() {
+    local file="$1"
+
+    [[ -f "$file" ]] || return 1
+    grep -Fq '@import url("./colors.css");' "$file" || return 1
+    grep -Fq -- "--newtab-background-color" "$file" || return 1
+    grep -Fq -- "--toolbar-field-focus-background-color" "$file" || return 1
+    grep -Fq ".search-inner-wrapper" "$file" || return 1
+}
+
+migrate_legacy_file_to_import() {
+    local file="$1"
+    local kind="$2"
+    shift 2
+
+    if [[ "$kind" == "chrome" ]] && looks_like_legacy_user_chrome "$file"; then
+        backup_once "$file"
+        write_import_block "$file" "$@"
+    elif [[ "$kind" == "content" ]] && looks_like_legacy_user_content "$file"; then
+        backup_once "$file"
+        write_import_block "$file" "$@"
+    fi
+}
+
+remove_empty_file() {
+    local file="$1"
+
+    [[ -f "$file" ]] || return 0
+    if ! grep -q '[^[:space:]]' "$file"; then
+        rm -f "$file"
+    fi
+}
+
+cleanup_firefox_theme() {
+    is_default_profile_valid || return 0
+    remove_managed_import_block "$user_chrome_file"
+    remove_managed_import_block "$user_content_file"
+    remove_empty_file "$user_chrome_file"
+    remove_empty_file "$user_content_file"
+    rm -f "$managed_colors_file" "$managed_chrome_file" "$managed_content_file"
+}
+
+if [[ "${1:-}" == "--cleanup" ]]; then
+    cleanup_firefox_theme
+    exit 0
+fi
+
+source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
+
+output_file="$HOME/.config/omarchy/current/theme/firefox.css"
+
+if ! command -v firefox >/dev/null 2>&1; then
+    skipped "Firefox"
+fi
+
+is_default_profile_valid || skipped "Firefox profile"
 
 enable_userchrome() {
     local prefs_file="$default_profile/prefs.js"
@@ -31,7 +176,7 @@ enable_userchrome() {
 }
 enable_userchrome
 
-mkdir -p "$default_profile/chrome"
+mkdir -p "$chrome_dir"
 
 cat > "$output_file" << EOF
 :root {
@@ -53,15 +198,10 @@ cat > "$output_file" << EOF
 --color0F: #${bright_red};
 }
 EOF
+cp "$output_file" "$legacy_colors_file"
+cp "$output_file" "$managed_colors_file"
 
-if [[ -d "$default_profile" ]]; then
-    cp "$output_file" "$default_profile/chrome/colors.css"
-fi
-
-if [[ ! -f "$default_profile/chrome/userChrome.css" ]]; then
-cat > "$default_profile/chrome/userChrome.css" << EOF
-@import url("./colors.css");
-
+cat > "$managed_chrome_file" << 'EOF'
 :root {
     --base00: var(--color00);
     --base01: color-mix(in srgb, var(--color00) 98%, white);
@@ -82,6 +222,13 @@ cat > "$default_profile/chrome/userChrome.css" << EOF
 }
 
 :root {
+    --panel-background: var(--base01) !important;
+    --panel-color: var(--base05) !important;
+    --panel-border-color: var(--base00) !important;
+    --panel-list-background-color: var(--base01) !important;
+    --panel-list-color: var(--base05) !important;
+    --arrowpanel-background: var(--base01) !important;
+    --arrowpanel-border-color: var(--base00) !important;
     --panel-separator-zap-gradient: linear-gradient(
         90deg,
         var(--base0E) 0%,
@@ -90,8 +237,73 @@ cat > "$default_profile/chrome/userChrome.css" << EOF
     ) !important;
     --toolbarbutton-border-radius: 6px !important;
     --toolbarbutton-icon-fill: var(--base04) !important;
+    --urlbarview-separator-color: var(--base01) !important;
     --urlbarView-separator-color: var(--base01) !important;
+    --urlbar-box-background-color: var(--base01) !important;
+    --urlbar-box-background-color-focus: var(--base02) !important;
+    --urlbar-box-background-color-hover: var(--base02) !important;
+    --urlbar-box-background-color-active: var(--base00) !important;
     --urlbar-box-bgcolor: var(--base01) !important;
+    --toolbar-field-background-color: var(--base01) !important;
+    --toolbar-field-color: var(--base05) !important;
+    --toolbar-field-border-color: var(--base00) !important;
+    --toolbar-field-focus-background-color: var(--base02) !important;
+    --toolbar-field-focus-color: var(--base05) !important;
+    --toolbar-field-focus-border-color: var(--base00) !important;
+    --color-accent-primary-active: var(--base0D) !important;
+    --color-accent-primary-hover: var(--base0D) !important;
+    --color-accent-primary: var(--base0D) !important;
+    --focus-outline-color: var(--base00) !important;
+    --icon-color-critical: var(--base08) !important;
+    --icon-color-information: var(--base0D) !important;
+    --icon-color-success: var(--base0B) !important;
+    --icon-color-warning: var(--base0A) !important;
+    --outline-color-error: var(--base08) !important;
+    --tab-block-margin: 0 !important;
+    --tab-border-radius: 0 !important;
+    --text-color-error: var(--base08) !important;
+    --toolbarbutton-border-radius: 6px !important;
+    --in-content-page-background: var(--base01) !important;
+    --input-text-background-color: var(--base02) !important;
+}
+
+#PopupSearchAutoComplete,
+#PopupAutoComplete,
+.searchmode-switcher-panel {
+    --panel-background: var(--base01) !important;
+    --panel-color: var(--base05) !important;
+    --panel-border-color: var(--base00) !important;
+    --panel-list-background-color: var(--base01) !important;
+    --panel-list-color: var(--base05) !important;
+    --urlbarview-separator-color: var(--base01) !important;
+}
+
+#PopupSearchAutoComplete::part(content),
+#PopupAutoComplete::part(content) {
+    background: var(--panel-background) !important;
+    color: var(--panel-color) !important;
+    border-color: var(--panel-border-color) !important;
+}
+
+.search-panel-tree {
+    background: var(--panel-background) !important;
+    color: var(--panel-color) !important;
+}
+
+.searchbar-engine-one-off-item:not([selected]):hover,
+.search-panel-tree > .autocomplete-richlistitem:hover {
+    background-color: var(--urlbar-box-background-color-hover) !important;
+}
+
+.searchbar-engine-one-off-item[selected],
+.search-panel-tree > .autocomplete-richlistitem[selected] {
+    background-color: var(--urlbar-box-background-color-focus) !important;
+    color: var(--base05) !important;
+}
+
+.searchmode-switcher-panel-list {
+    --panel-list-background-color: var(--base01) !important;
+    --panel-list-color: var(--base05) !important;
 }
 
 /* Tabs colors  */
@@ -112,6 +324,7 @@ cat > "$default_profile/chrome/userChrome.css" << EOF
 /* Inactive tabs color */
 #navigator-toolbox {
     background-color: var(--base00) !important;
+    border: none !important;
 }
 
 /* Window colors  */
@@ -167,10 +380,6 @@ toolbarbutton {
     border-radius: 6px !important;
 }
 
-#navigator-toolbox {
-    border: none !important;
-}
-
 .urlbarView-url {
     color: var(--base05) !important;
 }
@@ -213,36 +422,9 @@ splitter#sidebar-tools-and-extensions-splitter {
 .urlbar-input {
     color: var(--base05) !important;
 }
-
-:root {
-    --arrowpanel-background: var(--base01) !important;
-    --arrowpanel-border-color: var(--base00) !important;
-    --color-accent-primary-active: var(--base0D) !important;
-    --color-accent-primary-hover: var(--base0D) !important;
-    --color-accent-primary: var(--base0D) !important;
-    --focus-outline-color: var(--base00) !important;
-    --icon-color-critical: var(--base08) !important;
-    --icon-color-information: var(--base0D) !important;
-    --icon-color-success: var(--base0B) !important;
-    --icon-color-warning: var(--base0A) !important;
-    --outline-color-error: var(--base08) !important;
-    --tab-block-margin: 0 !important;
-    --tab-border-radius: 0 !important;
-    --text-color-error: var(--base08) !important;
-    --toolbar-field-border-color: var(--base00) !important;
-    --toolbar-field-focus-background-color: var(--base02) !important;
-    --toolbar-field-focus-border-color: var(--base00) !important;
-    --toolbarbutton-border-radius: 6px !important;
-    --in-content-page-background: var(--base01) !important;
-    --input-text-background-color: var(--base02) !important;
-}
 EOF
-fi
 
-if [[ ! -f "$default_profile/chrome/userContent.css" ]]; then
-cat > "$default_profile/chrome/userContent.css" <<EOF
-@import url("./colors.css");
-
+cat > "$managed_content_file" << 'EOF'
 :root {
     --base00: var(--color00);
     --base01: color-mix(in srgb, var(--color00) 98%, white);
@@ -282,7 +464,6 @@ cat > "$default_profile/chrome/userContent.css" <<EOF
     --tab-block-margin: 0 !important;
     --tab-border-radius: 0 !important;
     --text-color-error: var(--base08) !important;
-    --toolbar-field-border-color: var(--base00) !important;
     --toolbar-field-border-color: var(--base01) !important;
     --toolbar-field-focus-background-color: var(--base02) !important;
     --toolbar-field-focus-border-color: var(--base01) !important;
@@ -300,7 +481,11 @@ body {
     margin-top: 10% !important;
 }
 EOF
-fi
+
+migrate_legacy_file_to_import "$user_chrome_file" chrome "thpm-firefox-colors.css" "thpm-firefox-userChrome.css"
+migrate_legacy_file_to_import "$user_content_file" content "thpm-firefox-colors.css" "thpm-firefox-userContent.css"
+ensure_managed_import_block "$user_chrome_file" "thpm-firefox-colors.css" "thpm-firefox-userChrome.css"
+ensure_managed_import_block "$user_content_file" "thpm-firefox-colors.css" "thpm-firefox-userContent.css"
 
 require_restart "firefox"
 success "Firefox theme updated!"

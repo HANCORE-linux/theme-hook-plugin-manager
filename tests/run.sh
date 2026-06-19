@@ -834,6 +834,28 @@ test_thpm_doctor_limits_plugin_specific_checks() {
   assert_not_contains "$output" "firefox:" "thpm doctor does not check unrelated plugins when a plugin is requested"
 }
 
+test_thpm_doctor_warns_when_runtime_source_is_only_commented() {
+  local home_dir="$TMP_ROOT/doctor-commented-source-home"
+  local bin_dir="$TMP_ROOT/doctor-commented-source-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir"
+  cat > "$hook_dir/99-commented-source.sh" <<'EOF'
+#!/usr/bin/env bash
+# source "${THPM_THEME_ENV:-$HOME/.local/share/thpm/lib/theme-env.sh}"
+printf 'not actually sourced\n'
+EOF
+  make_stub_bin "$bin_dir" omarchy-hook 'exit 0'
+
+  output="$(PATH="$bin_dir:$PATH" THPM_THEME_ENV="$ROOT_DIR/lib/theme-env.sh" HOME="$home_dir" "$ROOT_DIR/thpm" doctor commented-source 2>&1)"
+
+  assert_contains "$output" "commented-source:" "thpm doctor checks hook with commented source line"
+  assert_contains "$output" "does not appear to source shared thpm runtime" "thpm doctor ignores commented runtime source references"
+  assert_not_contains "$output" "sources shared thpm runtime" "thpm doctor does not accept comments as runtime sourcing"
+}
+
 test_thpm_open_uses_xdg_open_for_hook_dir() {
   local home_dir="$TMP_ROOT/open-home"
   local bin_dir="$TMP_ROOT/open-bin"
@@ -897,7 +919,11 @@ source "$ROOT_DIR/lib/theme-env.sh"
 {
   printf 'primary_background=%s\n' "\$primary_background"
   printf 'primary_foreground=%s\n' "\$primary_foreground"
+  printf 'cursor_color=%s\n' "\$cursor_color"
   printf 'rgb_primary_background=%s\n' "\$rgb_primary_background"
+  printf 'rgb_cursor_color=%s\n' "\$rgb_cursor_color"
+  printf 'rgb_selection_background=%s\n' "\$rgb_selection_background"
+  printf 'rgb_selection_foreground=%s\n' "\$rgb_selection_foreground"
   printf 'normal_red=%s\n' "\$normal_red"
   printf 'bright_white=%s\n' "\$bright_white"
 } > "$output_file"
@@ -914,7 +940,11 @@ EOF
 
   assert_contains "$(cat "$output_file")" "primary_background=101112" "theme-set exports background color"
   assert_contains "$(cat "$output_file")" "primary_foreground=f1f2f3" "theme-set exports foreground color"
+  assert_contains "$(cat "$output_file")" "cursor_color=abcdef" "theme-set exports cursor color"
   assert_contains "$(cat "$output_file")" "rgb_primary_background=16, 17, 18" "theme-set exports rgb background"
+  assert_contains "$(cat "$output_file")" "rgb_cursor_color=171, 205, 239" "theme-set exports rgb cursor color"
+  assert_contains "$(cat "$output_file")" "rgb_selection_background=34, 34, 34" "theme-set exports rgb selection background"
+  assert_contains "$(cat "$output_file")" "rgb_selection_foreground=238, 238, 238" "theme-set exports rgb selection foreground"
   assert_contains "$(cat "$output_file")" "normal_red=111111" "theme-set exports normal palette color"
   assert_contains "$(cat "$output_file")" "bright_white=ffffff" "theme-set exports bright palette color"
 
@@ -1342,6 +1372,134 @@ test_browser_plugins_skip_missing_profiles() {
   assert_contains "$output" "Zen Browser profile not found. Skipping.." "zen plugin skips missing profile"
   assert_file_missing "$home_dir/.mozilla/firefox/chrome/colors.css" "firefox plugin does not write fallback root profile"
   assert_file_missing "$home_dir/.zen/chrome/colors.css" "zen plugin does not write fallback root profile"
+}
+
+test_firefox_plugin_writes_managed_imports_and_popup_rules() {
+  local home_dir="$TMP_ROOT/firefox-managed-home"
+  local bin_dir="$TMP_ROOT/firefox-managed-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local profile_dir="$home_dir/.mozilla/firefox/default"
+  local chrome_dir="$profile_dir/chrome"
+  local user_chrome="$chrome_dir/userChrome.css"
+  local user_content="$chrome_dir/userContent.css"
+  local managed_chrome="$chrome_dir/thpm-firefox-userChrome.css"
+  local managed_content="$chrome_dir/thpm-firefox-userContent.css"
+  local output
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$chrome_dir"
+  cat > "$home_dir/.mozilla/firefox/profiles.ini" <<'EOF'
+[Install123]
+Default=default
+EOF
+  printf 'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", false);\n' > "$profile_dir/prefs.js"
+  cp "$ROOT_DIR/theme-set.d/40-firefox.sh" "$hook_dir/40-firefox.sh"
+  chmod +x "$hook_dir/40-firefox.sh"
+  make_stub_bin "$bin_dir" firefox 'exit 0'
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+
+  output="$(PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" 2>&1)"
+
+  assert_contains "$output" "Firefox theme updated!" "firefox plugin reports success"
+  assert_file_exists "$chrome_dir/thpm-firefox-colors.css" "firefox plugin writes managed colors file"
+  assert_file_exists "$chrome_dir/colors.css" "firefox plugin keeps legacy colors.css for existing imports"
+  assert_file_exists "$managed_chrome" "firefox plugin writes managed chrome stylesheet"
+  assert_file_exists "$managed_content" "firefox plugin writes managed content stylesheet"
+  assert_contains "$(cat "$user_chrome")" "/* THPM Firefox hook start */" "firefox plugin inserts userChrome managed import marker"
+  assert_contains "$(cat "$user_chrome")" '@import url("./thpm-firefox-colors.css");' "firefox plugin imports managed colors into userChrome"
+  assert_contains "$(cat "$user_chrome")" '@import url("./thpm-firefox-userChrome.css");' "firefox plugin imports managed chrome stylesheet"
+  assert_contains "$(cat "$user_content")" '@import url("./thpm-firefox-userContent.css");' "firefox plugin imports managed content stylesheet"
+  assert_contains "$(cat "$managed_chrome")" "--panel-background: var(--base01) !important;" "firefox plugin sets current panel background variable"
+  assert_contains "$(cat "$managed_chrome")" "#PopupSearchAutoComplete::part(content)" "firefox plugin targets search autocomplete popup content"
+  assert_contains "$(cat "$managed_chrome")" "--panel-list-background-color: var(--base01) !important;" "firefox plugin sets search mode panel list background"
+  assert_contains "$(cat "$managed_chrome")" "--urlbarview-separator-color: var(--base01) !important;" "firefox plugin sets current lowercase urlbar separator variable"
+  assert_contains "$(cat "$managed_chrome")" "--urlbar-box-background-color: var(--base01) !important;" "firefox plugin sets current urlbar box background variable"
+  assert_contains "$(cat "$profile_dir/prefs.js")" 'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);' "firefox plugin enables userChrome pref"
+}
+
+test_firefox_plugin_preserves_custom_user_css() {
+  local home_dir="$TMP_ROOT/firefox-custom-home"
+  local bin_dir="$TMP_ROOT/firefox-custom-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local profile_dir="$home_dir/.mozilla/firefox/default"
+  local chrome_dir="$profile_dir/chrome"
+  local user_chrome="$chrome_dir/userChrome.css"
+  local user_content="$chrome_dir/userContent.css"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$chrome_dir"
+  cat > "$home_dir/.mozilla/firefox/profiles.ini" <<'EOF'
+[Install123]
+Default=default
+EOF
+  cat > "$user_chrome" <<'EOF'
+.custom-chrome-rule { color: red; }
+EOF
+  cat > "$user_content" <<'EOF'
+.custom-content-rule { color: blue; }
+EOF
+  cp "$ROOT_DIR/theme-set.d/40-firefox.sh" "$hook_dir/40-firefox.sh"
+  chmod +x "$hook_dir/40-firefox.sh"
+  make_stub_bin "$bin_dir" firefox 'exit 0'
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
+
+  assert_contains "$(cat "$user_chrome")" "/* THPM Firefox hook start */" "firefox plugin inserts managed import block into custom userChrome"
+  assert_contains "$(cat "$user_chrome")" ".custom-chrome-rule" "firefox plugin preserves custom userChrome content"
+  assert_contains "$(cat "$user_content")" "/* THPM Firefox hook start */" "firefox plugin inserts managed import block into custom userContent"
+  assert_contains "$(cat "$user_content")" ".custom-content-rule" "firefox plugin preserves custom userContent content"
+}
+
+test_firefox_plugin_migrates_legacy_generated_css() {
+  local home_dir="$TMP_ROOT/firefox-legacy-home"
+  local bin_dir="$TMP_ROOT/firefox-legacy-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local profile_dir="$home_dir/.mozilla/firefox/default"
+  local chrome_dir="$profile_dir/chrome"
+  local user_chrome="$chrome_dir/userChrome.css"
+  local user_content="$chrome_dir/userContent.css"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir" "$chrome_dir"
+  cat > "$home_dir/.mozilla/firefox/profiles.ini" <<'EOF'
+[Install123]
+Default=default
+EOF
+  cat > "$user_chrome" <<'EOF'
+@import url("./colors.css");
+:root {
+    --panel-separator-zap-gradient: linear-gradient(red, blue) !important;
+    --arrowpanel-background: var(--base01) !important;
+    --urlbar-box-bgcolor: var(--base01) !important;
+}
+EOF
+  cat > "$user_content" <<'EOF'
+@import url("./colors.css");
+:root {
+    --newtab-background-color: var(--base01) !important;
+    --toolbar-field-focus-background-color: var(--base02) !important;
+}
+.search-inner-wrapper {
+    margin-top: 10% !important;
+}
+EOF
+  cp "$ROOT_DIR/theme-set.d/40-firefox.sh" "$hook_dir/40-firefox.sh"
+  chmod +x "$hook_dir/40-firefox.sh"
+  make_stub_bin "$bin_dir" firefox 'exit 0'
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir" >/dev/null
+
+  assert_file_exists "$user_chrome.thpm-migrated.bak" "firefox plugin backs up legacy generated userChrome"
+  assert_file_exists "$user_content.thpm-migrated.bak" "firefox plugin backs up legacy generated userContent"
+  assert_contains "$(cat "$user_chrome")" '@import url("./thpm-firefox-userChrome.css");' "firefox plugin replaces legacy userChrome with managed import"
+  assert_not_contains "$(cat "$user_chrome")" "--urlbar-box-bgcolor" "firefox plugin removes stale legacy userChrome body"
+  assert_contains "$(cat "$user_content")" '@import url("./thpm-firefox-userContent.css");' "firefox plugin replaces legacy userContent with managed import"
+  assert_not_contains "$(cat "$user_content")" "--newtab-background-color" "firefox plugin removes stale legacy userContent body"
 }
 
 test_zen_plugin_uses_managed_imports_and_migrates_legacy_css() {
@@ -2591,7 +2749,7 @@ test_uninstall_removes_files_and_qutebrowser_theme() {
   local bin_dir="$TMP_ROOT/uninstall-bin"
   local output
 
-  mkdir -p "$bin_dir" "$home_dir/.local/bin" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/omarchy/branding" "$home_dir/.config/qutebrowser/omarchy" "$home_dir/.zen/default/chrome"
+  mkdir -p "$bin_dir" "$home_dir/.local/bin" "$home_dir/.local/share/omarchy/bin" "$home_dir/.config/omarchy/hooks/theme-set.d" "$home_dir/.config/omarchy/branding" "$home_dir/.config/qutebrowser/omarchy" "$home_dir/.zen/default/chrome" "$home_dir/.mozilla/firefox/default/chrome"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/bin/thpm"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.local/share/omarchy/bin/thpm"
   printf 'default about\n' > "$home_dir/.local/share/omarchy/icon.txt"
@@ -2601,6 +2759,7 @@ test_uninstall_removes_files_and_qutebrowser_theme() {
   printf '# Omarchy 3.3+ uses colors.toml as the source of truth for theme colors.\n' > "$home_dir/.config/omarchy/hooks/theme-set"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/00-fzf.sh"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/10-branding.sh"
+  cp "$ROOT_DIR/theme-set.d/40-firefox.sh" "$home_dir/.config/omarchy/hooks/theme-set.d/40-firefox.sh"
   cp "$ROOT_DIR/theme-set.d/40-zen.sh" "$home_dir/.config/omarchy/hooks/theme-set.d/40-zen.sh"
   printf '#!/usr/bin/env bash\n' > "$home_dir/.config/omarchy/hooks/theme-set.d/99-custom.sh"
   mkdir -p "$home_dir/.local/share/thpm/lib"
@@ -2620,6 +2779,16 @@ EOF
 /* THPM Zen hook end */
 EOF
   printf 'managed\n' > "$home_dir/.zen/default/chrome/thpm-zen-userChrome.css"
+  cat > "$home_dir/.mozilla/firefox/profiles.ini" <<'EOF'
+[Install123]
+Default=default
+EOF
+  cat > "$home_dir/.mozilla/firefox/default/chrome/userChrome.css" <<'EOF'
+/* THPM Firefox hook start */
+@import url("./thpm-firefox-userChrome.css");
+/* THPM Firefox hook end */
+EOF
+  printf 'managed\n' > "$home_dir/.mozilla/firefox/default/chrome/thpm-firefox-userChrome.css"
 
   make_stub_bin "$bin_dir" omarchy-show-logo 'printf "logo\n"'
   make_stub_bin "$bin_dir" omarchy-show-done 'printf "done\n"'
@@ -2646,6 +2815,8 @@ EOF
   assert_eq "config.load_autoconfig()" "$(cat "$home_dir/.config/qutebrowser/config.py")" "uninstall removes qutebrowser config lines"
   assert_file_missing "$home_dir/.zen/default/chrome/thpm-zen-userChrome.css" "uninstall removes managed zen stylesheet"
   assert_not_contains "$(cat "$home_dir/.zen/default/chrome/userChrome.css")" "THPM Zen hook" "uninstall removes zen import block"
+  assert_file_missing "$home_dir/.mozilla/firefox/default/chrome/thpm-firefox-userChrome.css" "uninstall removes managed firefox stylesheet"
+  assert_file_missing "$home_dir/.mozilla/firefox/default/chrome/userChrome.css" "uninstall removes empty firefox userChrome after managed block cleanup"
 }
 
 test_uninstall_warns_and_preserves_branding_when_default_missing() {
@@ -2799,6 +2970,9 @@ main() {
   test_discord_plugin_repairs_stale_current_css_from_theme_source
   test_discord_plugin_generates_base16_fallback_without_theme_css
   test_browser_plugins_skip_missing_profiles
+  test_firefox_plugin_writes_managed_imports_and_popup_rules
+  test_firefox_plugin_preserves_custom_user_css
+  test_firefox_plugin_migrates_legacy_generated_css
   test_zen_plugin_uses_managed_imports_and_migrates_legacy_css
   test_zen_plugin_repairs_incomplete_managed_import_block
   test_qutebrowser_plugin_writes_theme_and_config
