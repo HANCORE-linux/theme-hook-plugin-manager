@@ -955,6 +955,33 @@ EOF
   fi
 }
 
+test_theme_set_handles_commented_palette_color() {
+  local home_dir="$TMP_ROOT/commented-palette-home"
+  local bin_dir="$TMP_ROOT/commented-palette-bin"
+  local hook_dir="$home_dir/.config/omarchy/hooks/theme-set.d"
+  local output_file="$TMP_ROOT/commented-palette-output"
+
+  write_colors_fixture "$home_dir"
+  mkdir -p "$hook_dir" "$bin_dir"
+  make_stub_bin "$bin_dir" pgrep 'exit 1'
+  make_stub_bin "$bin_dir" notify-send 'exit 0'
+  sed -i 's/^color0 =/# color0 =/' "$home_dir/.config/omarchy/current/theme/colors.toml"
+
+  cat > "$hook_dir/10-capture.sh" <<EOF
+#!/usr/bin/env bash
+source "$ROOT_DIR/lib/theme-env.sh"
+{
+  printf 'normal_black=%s\n' "\$normal_black"
+  printf 'rgb_normal_black=%s\n' "\$rgb_normal_black"
+} > "$output_file"
+EOF
+
+  PATH="$bin_dir:$PATH" run_theme_hooks "$home_dir"
+
+  assert_contains "$(cat "$output_file")" "normal_black=" "theme-set leaves missing commented palette color empty"
+  assert_contains "$(cat "$output_file")" "rgb_normal_black=0, 0, 0" "theme-set defaults missing commented palette rgb to black"
+}
+
 test_theme_env_errors_without_colors_file() {
   local home_dir="$TMP_ROOT/missing-colors-home"
   local output
@@ -2953,6 +2980,7 @@ main() {
   test_thpm_open_uses_xdg_open_for_hook_dir
   test_thpm_gtk_post_enable_disable_updates_gsettings
   test_theme_set_exports_colors_and_runs_enabled_hooks
+  test_theme_set_handles_commented_palette_color
   test_theme_env_errors_without_colors_file
   test_theme_set_reports_hook_failure
   test_theme_set_sends_restart_notification

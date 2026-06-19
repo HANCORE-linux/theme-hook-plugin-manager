@@ -151,6 +151,12 @@ extract_color() {
 
 hex2rgb() {
     local hex_input=$1
+
+    [[ -n "$hex_input" ]] || {
+        echo "0, 0, 0"
+        return 0
+    }
+
     local r=$((16#${hex_input:0:2}))
     local g=$((16#${hex_input:2:2}))
     local b=$((16#${hex_input:4:2}))
