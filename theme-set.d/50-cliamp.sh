@@ -67,7 +67,7 @@ _set_theme() {
 _remove_marker_file() { [ -f "$target" ] && head -n1 "$target" | tr -d '\r' | grep -qxF "$MARKER" && rm -f "$target"; }
 
 # comment/quote-safe TOML value extractor: $1=file $2=key -> normalised #RRGGBB (3-digit expanded)
-# or empty. cliamp's own parser does NOT strip inline comments, so we must canonicalise before install.
+# or empty. Older cliamp builds may reject inline comments, so we canonicalise before install.
 _toml_hex() {
     awk -v k="$2" -v SQ="'" '
         function strip_comment(s,  i,c,q,o){ q=""; o=""; for(i=1;i<=length(s);i++){ c=substr(s,i,1); if(q==""){ if(c=="\""||c==SQ){q=c;o=o c;continue} if(c=="#")break; o=o c } else { o=o c; if(c==q)q="" } } return o }
@@ -81,8 +81,8 @@ _toml_hex() {
 }
 
 # ===== 1. theme ships a cliamp.toml AND opts in via the exact NATIVE_OPT_IN line -> CANONICALISE
-#          its 6 colours (drop inline comments, which cliamp's parser folds into the value and then
-#          rejects; normalise hex) and install. No opt-in marker -> ANSI default. =====
+#          its 6 colours (drop inline comments, which older cliamp builds may fold into the value
+#          and reject; normalise hex) and install. No opt-in marker -> ANSI default. =====
 native="$theme_src/cliamp.toml"
 if [ -f "$native" ] && tr -d '\r' < "$native" | grep -qxF "$NATIVE_OPT_IN"; then
     declare -A NV; usable=1

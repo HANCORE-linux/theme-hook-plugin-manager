@@ -2983,10 +2983,10 @@ test_cliamp_installs_canonical_native_dropping_inline_comments() {
   mkdir -p "$hook_dir" "$bin_dir"
   cp "$ROOT_DIR/theme-set.d/50-cliamp.sh" "$hook_dir/50-cliamp.sh"
   chmod +x "$hook_dir/50-cliamp.sh"
-  # The theme ships its own cliamp.toml WITH inline comments. cliamp's parser does NOT strip them,
-  # so a verbatim copy is silently rejected by cliamp. The hook must canonicalise. Real-binary
-  # oracle (run locally; CI has no cliamp): `cliamp theme list | grep -qx '  omarchy'`. Here we
-  # assert the canonical output that makes cliamp accept it (clean uppercased hex, no comments).
+  # The theme ships its own cliamp.toml WITH inline comments. Older cliamp builds may reject these
+  # (folding the comment into the value), so the hook canonicalises. Real-binary oracle (run
+  # locally; CI has no cliamp): `cliamp theme list | grep -qx '  omarchy'`. Here we assert the
+  # canonical output that makes cliamp accept it (clean uppercased hex, no comments).
   cat > "$theme_dir/cliamp.toml" <<'EOF'
 # thpm:cliamp-use-native
 accent = "#2488cb"   # muted purple — primary interactive
@@ -3002,7 +3002,7 @@ EOF
 
   assert_file_exists "$out" "cliamp installs the theme's own cliamp.toml"
   assert_contains "$(cat "$out")" 'accent    = "#2488CB"' "cliamp native install canonicalises hex (uppercased)"
-  assert_not_contains "$(cat "$out")" "muted purple" "cliamp native install strips inline comments cliamp would reject"
+  assert_not_contains "$(cat "$out")" "muted purple" "cliamp native install strips inline comments older cliamp builds would reject"
   assert_contains "$(cat "$home_dir/.config/cliamp/config.toml")" 'theme = "omarchy"' "cliamp native install selects the omarchy theme"
 }
 
